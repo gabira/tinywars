@@ -1,16 +1,15 @@
 import { BUILDINGS, BUILD_MENU } from '../data/buildings';
-import { TEAMS } from '../data/factions';
 import type { BuildingId, Cost, UnitId } from '../data/types';
 import { UNITS } from '../data/units';
 import type { Building, Unit } from '../entities/Entity';
-import { teamColor } from '../render/palette';
+import { teamColor, type TeamColor } from '../render/palette';
 import { S, fmt, resName } from '../i18n/t';
 import type { CommandResult } from '../systems/commands';
 import type { Session } from './Session';
 
 export type IconSpec =
-  | { kind: 'image'; key: string; fallback: string }
-  | { kind: 'unit'; sheet: string }
+  | { kind: 'image'; key: string; zoom?: number }
+  | { kind: 'unit'; unit: UnitId; color: TeamColor }
   | { kind: 'building'; id: BuildingId };
 
 export interface CardButton {
@@ -82,7 +81,7 @@ export function commandCard(session: Session): CardButton[] {
   if (units.length) {
     const workers = units.filter((u) => u.isWorker);
     if (session.buildMenu && workers.length) {
-      BUILD_MENU[TEAMS[0].faction].forEach((bid, i) => {
+      BUILD_MENU.forEach((bid, i) => {
         const def = BUILDINGS[bid];
         const reqOk = !def.requires || w.buildings.some((b) => b.alive && b.team === 0 && b.complete && b.def.id === def.requires);
         buttons.push({
@@ -109,7 +108,7 @@ export function commandCard(session: Session): CardButton[] {
         hotkey: 'ESC',
         name: S.cmd.back,
         desc: '',
-        icon: { kind: 'image', key: 'icon_back', fallback: 'ui_icon_x' },
+        icon: { kind: 'image', key: 'icon_08' },
         enabled: true,
         action: () => {
           session.buildMenu = false;
@@ -124,7 +123,7 @@ export function commandCard(session: Session): CardButton[] {
       hotkey: 'F',
       name: S.cmd.attackMove,
       desc: S.cmdDesc.attackMove,
-      icon: { kind: 'image', key: 'icon_sword', fallback: 'ui_icon_x' },
+      icon: { kind: 'image', key: 'icon_05' },
       enabled: true,
       active: session.mode === 'attackMove',
       action: () => {
@@ -137,7 +136,7 @@ export function commandCard(session: Session): CardButton[] {
       hotkey: 'X',
       name: S.cmd.stop,
       desc: S.cmdDesc.stop,
-      icon: { kind: 'image', key: 'icon_stop', fallback: 'ui_icon_x' },
+      icon: { kind: 'image', key: 'icon_09' },
       enabled: true,
       action: () => w.issue(0, { type: 'stop', unitIds: ids() }),
     });
@@ -146,7 +145,7 @@ export function commandCard(session: Session): CardButton[] {
       hotkey: 'H',
       name: S.cmd.hold,
       desc: S.cmdDesc.hold,
-      icon: { kind: 'image', key: 'icon_shield', fallback: 'ui_icon_gear' },
+      icon: { kind: 'image', key: 'icon_06' },
       enabled: true,
       action: () => w.issue(0, { type: 'hold', unitIds: ids() }),
     });
@@ -156,7 +155,7 @@ export function commandCard(session: Session): CardButton[] {
         hotkey: 'B',
         name: S.cmd.build,
         desc: S.cmdDesc.build,
-        icon: { kind: 'image', key: 'icon_hammer', fallback: `house_${teamColor(0)}` },
+        icon: { kind: 'image', key: 'icon_01' },
         enabled: true,
         action: () => {
           session.buildMenu = true;
@@ -169,7 +168,7 @@ export function commandCard(session: Session): CardButton[] {
           hotkey: 'E',
           name: S.cmd.returnCargo,
           desc: S.cmdDesc.returnCargo,
-          icon: { kind: 'image', key: 'g_idle', fallback: 'g_idle' },
+          icon: { kind: 'image', key: 'gold_res', zoom: 2.4 },
           enabled: true,
           action: () => w.issue(0, { type: 'returnCargo', unitIds: workers.map((u) => u.id) }),
         });
@@ -186,7 +185,7 @@ export function commandCard(session: Session): CardButton[] {
         hotkey: 'ESC',
         name: S.cmd.cancel,
         desc: S.cmdDesc.cancel,
-        icon: { kind: 'image', key: 'icon_stop', fallback: 'ui_icon_x' },
+        icon: { kind: 'image', key: 'icon_09' },
         enabled: true,
         action: () => {
           w.issue(0, { type: 'cancelBuild', buildingId: b.id });
@@ -204,7 +203,7 @@ export function commandCard(session: Session): CardButton[] {
         desc: S.units[uid].desc,
         cost: def.cost,
         time: def.trainTime,
-        icon: { kind: 'unit', sheet: `${def.sheet}_${teamColor(0)}` },
+        icon: { kind: 'unit', unit: uid, color: teamColor(0) },
         enabled: player.canAfford(def.cost),
         action: () => report(session, w.issue(0, { type: 'train', buildingId: b.id, unit: uid })),
       });

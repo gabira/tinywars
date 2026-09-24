@@ -38,7 +38,7 @@ const MANUAL_HELP = `
 Não foi possível baixar automaticamente. Faça assim:
   1) Abra https://pixelfrog-assets.itch.io/tiny-swords
   2) Clique em "Download Now" → "No thanks, just take me to the downloads"
-  3) Baixe "TS_old version_CC0 Licensed" (e, se quiser, "Tiny Swords (Free Pack).zip")
+  3) Baixe "Tiny Swords (Free Pack).zip" e "TS_old version_CC0 Licensed"
      NÃO é preciso comprar nada. O "Enemy Pack" é pago e não é usado automaticamente.
   4) Coloque os arquivos .zip na pasta assets-manual/ deste projeto
   5) Rode "npm run assets" de novo
@@ -249,12 +249,9 @@ async function main() {
   }
 
   const index = writeIndex(hashes);
-  const legacy = index.packs.legacy;
-  const ok =
-    legacy &&
-    ['Factions/Knights/', 'Factions/Goblins/', 'Terrain/', 'Resources/'].every((p) =>
-      Object.keys(legacy.files).some((f) => f.startsWith(p)),
-    );
+  // o Free Pack é a arte principal; da versão antiga (CC0) vêm fundações, ruínas e a caveira
+  const has = (pack, prefixes) => !!index.packs[pack] && prefixes.every((p) => Object.keys(index.packs[pack].files).some((f) => f.startsWith(p)));
+  const ok = has('free', ['Units/', 'Buildings/', 'Terrain/', 'UI Elements/']) && has('legacy', ['Factions/Knights/Buildings/']);
 
   if (!ok) {
     console.error(MANUAL_HELP);

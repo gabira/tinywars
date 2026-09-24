@@ -23,7 +23,7 @@ export function pickAt(world: World, wx: number, wy: number): AnyEntity | null {
     if (!b.alive) continue;
     if (b.team !== 0 && !v.rectExplored(b.tx, b.ty, b.def.w, b.def.h)) continue;
     const r = b.rect;
-    const extra = buildingVisual(b.def.id, teamColor(b.team), true).height;
+    const extra = buildingVisual(b.def.id, teamColor(b.team)).height;
     if (wx >= r.x && wx <= r.x + r.w && wy >= r.y - extra && wy <= r.y + r.h) {
       if (!front || r.y + r.h > front.rect.y + front.rect.h) front = b;
     }

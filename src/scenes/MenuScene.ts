@@ -42,7 +42,7 @@ export class MenuScene extends Phaser.Scene {
     this.drawIsland(width / 2, height / 2 + 30, 18, 7);
 
     const ui = this.add.container(0, 0).setDepth(1000);
-    ui.add(ribbon(this, width / 2, height / 2 - 250, 420, S.game.title, 'blue', 40));
+    ui.add(ribbon(this, width / 2, height / 2 - 250, 420, S.game.title, this.color, 40));
     ui.add(this.add.text(width / 2, height / 2 - 200, S.game.subtitle, textStyle(22)).setOrigin(0.5));
 
     const bx = width / 2;
@@ -131,6 +131,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /** Desenha uma ilha retangular com espuma, árvores e algumas unidades animadas. */
+  /** Desenha uma ilha com espuma, árvores e os dois reinos (nas cores escolhidas). */
   private drawIsland(cx: number, cy: number, tw: number, th: number): void {
     const x0 = Math.round(cx - (tw * TILE) / 2);
     const y0 = Math.round(cy - (th * TILE) / 2);
@@ -140,35 +141,42 @@ export class MenuScene extends Phaser.Scene {
         const px = x0 + x * TILE + TILE / 2;
         const py = y0 + y * TILE + TILE / 2;
         if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1))
-          this.add.sprite(px, py, 'foam').play('foam.play').setDepth(-60);
-        this.add.image(px, py, 'tiles_flat', autotileIndex(inside, x, y, GRASS_BASE)).setDepth(-50);
+          this.add.sprite(px, py, 'foam').play({ key: 'foam.play', startFrame: (x * 3 + y * 5) % 16 }).setDepth(-60);
+        this.add.image(px, py, 'tiles_main', autotileIndex(inside, x, y, GRASS_BASE)).setDepth(-50);
       }
     const p = this.color;
     const ai = aiColorFor(p);
     const at = (tx: number, ty: number) => ({ x: x0 + tx * TILE, y: y0 + ty * TILE });
-    const put = (key: string, tx: number, ty: number, anim?: string, flip = false, oy = 0.69) => {
-      const p = at(tx, ty);
-      const s = this.add.sprite(p.x, p.y, key).setOrigin(0.5, oy).setDepth(p.y).setFlipX(flip);
-      if (anim) s.play({ key: anim, startFrame: Math.floor(Math.random() * (this.anims.get(anim)?.frames.length ?? 1)) });
+    const put = (key: string, tx: number, ty: number, flip = false, oy = 0.7) => {
+      const pos = at(tx, ty);
+      const anim = `${key}.play`;
+      const s = this.add.sprite(pos.x, pos.y, key).setOrigin(0.5, oy).setDepth(pos.y).setFlipX(flip);
+      if (this.anims.exists(anim)) s.play({ key: anim, startFrame: Math.floor(Math.random() * this.anims.get(anim).frames.length) });
       return s;
     };
-    put(`castle_${p}`, 2.7, 3.4, undefined, false, 0.95);
-    put('goblin_house', 14.4, 2.9, undefined, false, 0.95);
-    put(`wood_tower_${ai}`, 16.2, 3.6, `wood_tower_${ai}.idle`, false, 0.95);
-    for (const [tx, ty] of [
-      [0.7, 1.3],
-      [1.5, 0.9],
-      [17.3, 6.1],
-      [16.4, 6.6],
-      [0.8, 6.4],
-    ])
-      put('tree', tx, ty, 'tree.idle', false, 0.88);
-    put(`warrior_${p}`, 4.9, 5.0, `warrior_${p}.idle`);
-    put(`archer_${p}`, 3.9, 5.9, `archer_${p}.idle`);
-    put(`pawn_${p}`, 1.9, 5.3, `pawn_${p}.idle`);
-    put(`torch_${ai}`, 13.4, 5.0, `torch_${ai}.idle`, true);
-    put(`tnt_${ai}`, 14.5, 5.9, `tnt_${ai}.idle`, true);
-    put(`barrel_${ai}`, 15.9, 5.3, `barrel_${ai}.hidden`, false, 0.77);
-    put('sheep', 2.6, 6.5, 'sheep.idle', false, 0.66);
+    // reino do jogador (à esquerda) e reino rival (à direita)
+    put(`castle_${p}`, 2.7, 3.4, false, 248 / 256);
+    put(`house1_${p}`, 5.2, 1.9, false, 172 / 192);
+    put(`archery_${ai}`, 15.2, 3.0, false, 239 / 256);
+    put(`tower_${ai}`, 17.1, 3.9, false, 229 / 256);
+    for (const [n, tx, ty] of [
+      [1, 0.7, 1.4],
+      [2, 1.5, 1.0],
+      [3, 17.3, 6.3],
+      [4, 16.3, 6.7],
+      [3, 0.8, 6.5],
+    ] as const)
+      put(`tree${n}`, tx, ty, false, n <= 2 ? 0.94 : 0.88);
+    put(`warrior_${p}_idle`, 4.9, 5.0);
+    put(`lancer_${p}_idle`, 3.7, 6.1, false, 197 / 320);
+    put(`pawn_${p}_idle_axe`, 1.9, 5.3);
+    put(`monk_${p}_idle`, 5.6, 6.3);
+    put(`warrior_${ai}_idle`, 13.3, 5.1, true);
+    put(`archer_${ai}_idle`, 14.5, 6.1, true);
+    put(`lancer_${ai}_idle`, 15.7, 5.4, true, 197 / 320);
+    put('sheep_grass', 2.6, 6.8, false, 0.66);
+    put('gold_stone4', 7.2, 6.3, false, 0.7);
+    put('bush1', 6.8, 1.3, false, 0.61);
+    put('bush2', 12.4, 6.9, false, 0.61);
   }
 }

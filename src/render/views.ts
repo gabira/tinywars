@@ -2,106 +2,89 @@ import Phaser from 'phaser';
 import { TILE } from '../config';
 import type { Building, Projectile, ResourceNode, Unit } from '../entities/Entity';
 import { teamColor } from './palette';
-import { originY, teamVisual, UNIT_ORIGIN_Y, type Part } from './visuals';
+import { buildingVisual, originY, UNIT_ORIGIN_Y, type Part } from './visuals';
 
 const lerp = Phaser.Math.Linear;
 
 // ------------------------------------------------------------------ unidades
 
-function dir3(fy: number): string {
-  return fy < -0.6 ? 'atkUp' : fy > 0.6 ? 'atkDown' : 'atkRight';
+function lancerDir(fy: number): string {
+  if (fy < -0.8) return 'up';
+  if (fy < -0.3) return 'upright';
+  if (fy < 0.3) return 'right';
+  if (fy < 0.8) return 'downright';
+  return 'down';
 }
 
-function dir5(fy: number): string {
-  if (fy < -0.8) return 'shootUp';
-  if (fy < -0.3) return 'shootUpRight';
-  if (fy < 0.3) return 'shootRight';
-  if (fy < 0.8) return 'shootDownRight';
-  return 'shootDown';
-}
-
-/** Nome da animação da spritesheet para o estado lógico da unidade. */
-export function unitAnimName(u: Unit): string {
+/** Textura (tira do Free Pack) para o estado atual da unidade. A animação é `${textura}.play`. */
+export function unitTexture(u: Unit, color: string): string {
   const s = u.def.sheet;
-  const worker = s === 'pawn';
+  const base = `${s}_${color}`;
+  const pawn = s === 'pawn';
   switch (u.anim) {
-    case 'idle':
-      return s === 'barrel' ? 'hidden' : 'idle';
     case 'run':
-      return 'run';
-    case 'carryIdle':
-      return worker ? 'carryIdle' : 'idle';
+      return pawn && u.tool ? `${base}_run_${u.tool}` : `${base}_run`;
     case 'carryRun':
-      return worker ? 'carryRun' : 'run';
-    case 'chop':
-      return worker ? 'chop' : 'idle';
-    case 'build':
-      return worker ? 'build' : 'idle';
+      return pawn && u.carry ? `${base}_run_${u.carry.res}` : `${base}_run`;
+    case 'carryIdle':
+      return pawn && u.carry ? `${base}_idle_${u.carry.res}` : `${base}_idle`;
+    case 'work':
+      return pawn ? `${base}_work_${u.tool ?? 'hammer'}` : `${base}_idle`;
+    case 'guard':
+      return s === 'warrior' || s === 'lancer' ? `${base}_guard` : `${base}_idle`;
     case 'attack':
       switch (s) {
         case 'pawn':
-          return 'chop';
+          return `${base}_work_knife`;
         case 'warrior':
-          return dir3(u.facingY) + (u.attackSeq % 2 ? '2' : '');
-        case 'torch':
-          return dir3(u.facingY);
+          return `${base}_attack${u.attackSeq % 2 ? 2 : 1}`;
+        case 'lancer':
+          return `${base}_attack_${lancerDir(u.facingY)}`;
         case 'archer':
-          return dir5(u.facingY);
-        case 'tnt':
-          return 'throw';
-        case 'barrel':
-          return 'ignite';
+          return `${base}_shoot`;
+        case 'monk':
+          return `${base}_heal`;
       }
+      return `${base}_idle`;
+    default:
+      return pawn && u.tool ? `${base}_idle_${u.tool}` : `${base}_idle`;
   }
-  return 'idle';
 }
-
-const CARRY_ICON = { gold: 'g_idle', wood: 'w_idle', meat: 'm_idle' } as const;
 
 export class UnitView {
   readonly sprite: Phaser.GameObjects.Sprite;
-  private carryIcon: Phaser.GameObjects.Image | null = null;
-  private sheetKey: string;
-  private curAnim = '';
+  private color: string;
+  private curTex = '';
   private seq = -1;
   seen = 0;
 
-  constructor(
-    private scene: Phaser.Scene,
-    u: Unit,
-  ) {
-    this.sheetKey = `${u.def.sheet}_${teamColor(u.team)}`;
-    this.sprite = scene.add.sprite(u.x, u.y, this.sheetKey).setOrigin(0.5, UNIT_ORIGIN_Y[u.def.sheet] ?? 0.68);
+  constructor(scene: Phaser.Scene, u: Unit) {
+    this.color = teamColor(u.team);
+    const tex = `${u.def.sheet}_${this.color}_idle`;
+    this.sprite = scene.add.sprite(u.x, u.y, tex).setOrigin(0.5, UNIT_ORIGIN_Y[u.def.sheet] ?? 0.7);
   }
 
   sync(u: Unit, alpha: number, visible: boolean): void {
     const x = lerp(u.prevX, u.x, alpha);
     const y = lerp(u.prevY, u.y, alpha);
-    const show = visible && !u.hidden;
-    this.sprite.setPosition(x, y).setDepth(y).setVisible(show);
+    this.sprite.setPosition(x, y).setDepth(y).setVisible(visible && !u.hidden);
     this.sprite.setFlipX(u.facingX < 0);
-    const anim = `${this.sheetKey}.${unitAnimName(u)}`;
+    const tex = unitTexture(u, this.color);
     if (u.anim === 'attack') {
+      // cada ataque reinicia a animação (tocada uma vez)
       if (u.attackSeq !== this.seq) {
         this.seq = u.attackSeq;
-        this.curAnim = anim;
-        this.sprite.play(anim);
+        this.curTex = tex;
+        this.sprite.play(`${tex}.play`);
       }
-    } else if (anim !== this.curAnim) {
-      this.curAnim = anim;
-      this.sprite.play({ key: anim, startFrame: 0 });
+    } else if (tex !== this.curTex) {
+      this.curTex = tex;
+      this.sprite.play({ key: `${tex}.play`, startFrame: 0 });
     }
-    const carrying = u.carry && u.carry.amount > 0 && u.def.sheet === 'pawn' && show;
-    if (carrying) {
-      const key = CARRY_ICON[u.carry!.res];
-      if (!this.carryIcon) this.carryIcon = this.scene.add.image(x, y, key).setScale(0.55).setOrigin(0.54, 0.62);
-      this.carryIcon.setTexture(key).setPosition(x, y - 54).setDepth(y + 0.5).setVisible(true);
-    } else if (this.carryIcon) this.carryIcon.setVisible(false);
   }
 
   destroy(): void {
     this.sprite.destroy();
-    this.carryIcon?.destroy();
   }
 }
 
@@ -110,7 +93,6 @@ export class UnitView {
 export class BuildingView {
   readonly container: Phaser.GameObjects.Container;
   private state = '';
-  private objs: (Phaser.GameObjects.Image | Phaser.GameObjects.Sprite)[] = [];
   private shooters: { sprite: Phaser.GameObjects.Sprite; idle: string; shoot: string }[] = [];
   private fires: Phaser.GameObjects.Sprite[] = [];
   private seq = 0;
@@ -126,17 +108,23 @@ export class BuildingView {
     this.seq = b.attackSeq;
   }
 
+  private visual() {
+    return buildingVisual(this.b.def.id, teamColor(this.b.team), this.b.id);
+  }
+
   private build(parts: Part[]): void {
     this.container.removeAll(true);
-    this.objs = [];
     this.shooters = [];
     this.fires = [];
     for (const p of parts) {
       if (!this.scene.textures.exists(p.key)) continue;
-      const o = p.anim ? this.scene.add.sprite(p.dx, p.dy, p.key).play({ key: p.anim, startFrame: Math.floor(Math.random() * (this.scene.anims.get(p.anim)?.frames.length ?? 1)) }) : this.scene.add.image(p.dx, p.dy, p.key, 0);
-      o.setOrigin(0.5, originY(p.key) ?? 1).setFlipX(!!p.flip);
+      let o: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
+      if (p.anim) {
+        const frames = this.scene.anims.get(p.anim)?.frames.length ?? 1;
+        o = this.scene.add.sprite(p.dx, p.dy, p.key).play({ key: p.anim, startFrame: Math.floor(Math.random() * frames) });
+      } else o = this.scene.add.image(p.dx, p.dy, p.key, 0);
+      o.setOrigin(0.5, p.originY ?? originY(p.key) ?? 1).setFlipX(!!p.flip);
       this.container.add(o);
-      this.objs.push(o);
       if (p.shooter && p.anim && o instanceof Phaser.GameObjects.Sprite) this.shooters.push({ sprite: o, idle: p.anim, shoot: p.shooter });
     }
   }
@@ -149,19 +137,20 @@ export class BuildingView {
       this.build(state === 'complete' ? vis.parts : vis.construction);
     }
     // fogo quando danificada
-    const wantFires = b.complete ? (b.hp < b.maxHp * 0.25 ? 2 : b.hp < b.maxHp * 0.5 ? 1 : 0) : 0;
+    const wantFires = b.complete ? (b.hp < b.maxHp * 0.25 ? 3 : b.hp < b.maxHp * 0.5 ? 2 : b.hp < b.maxHp * 0.75 ? 1 : 0) : 0;
     while (this.fires.length < wantFires) {
       const i = this.fires.length;
+      const spread = b.def.w * TILE * 0.28;
       const f = this.scene.add
-        .sprite((i ? 1 : -1) * b.def.w * TILE * 0.18, -b.def.h * TILE * 0.75 - i * 16, 'fire')
-        .play({ key: 'fire.play', startFrame: i * 3 })
-        .setOrigin(0.5, 0.8)
-        .setScale(0.8);
+        .sprite([-1, 1, 0][i] * spread, -b.def.h * TILE * (0.55 + i * 0.15), `fire${(i % 3) + 1}`)
+        .play({ key: `fire${(i % 3) + 1}.play`, startFrame: i * 2 })
+        .setOrigin(0.5, 1)
+        .setScale(1.3);
       this.container.add(f);
       this.fires.push(f);
     }
     while (this.fires.length > wantFires) this.fires.pop()!.destroy();
-    // atirador no topo da torre
+    // arqueiro no topo da torre
     if (b.attackSeq !== this.seq) {
       this.seq = b.attackSeq;
       for (const s of this.shooters) {
@@ -174,15 +163,10 @@ export class BuildingView {
 
   /** Troca para as ruínas e some depois de um tempo. */
   toRuin(now: number): void {
-    const vis = this.visual();
     this.state = 'ruin';
-    this.build(vis.destroyed);
+    this.build(this.visual().destroyed);
     this.ruinUntil = now + 30_000;
     this.container.setDepth(this.b.rect.y + this.b.rect.h - 40);
-  }
-
-  private visual() {
-    return teamVisual(this.scene.textures, this.b.def.id, teamColor(this.b.team));
   }
 
   destroy(): void {
@@ -192,11 +176,18 @@ export class BuildingView {
 
 // ------------------------------------------------------------------ recursos
 
+/** Base visível das árvores e tocos (y da base / altura do quadro). */
+const TREE_ORIGIN = [240 / 256, 248 / 256, 169 / 192, 167 / 192];
+const STUMP_ORIGIN = [239 / 256, 244 / 256, 231 / 256, 227 / 256];
+
 export class ResourceView {
-  readonly obj: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
-  private pile: Phaser.GameObjects.Sprite | null = null;
+  readonly obj: Phaser.GameObjects.Sprite;
+  private pile: Phaser.GameObjects.Image | null = null;
   private hitSeq = 0;
-  private workers = -1;
+  private variant: number;
+  private goldSize = 0;
+  private goldShine = false;
+  private grazeTimer = 0;
   seen = 0;
 
   constructor(
@@ -204,69 +195,86 @@ export class ResourceView {
     readonly r: ResourceNode,
   ) {
     const k = r.def.kind;
+    this.variant = (r.id * 7) % 4;
     if (k === 'tree') {
+      const n = this.variant + 1;
       this.obj = scene.add
-        .sprite(r.tx * TILE + TILE / 2, r.ty * TILE + 58, 'tree')
-        .setOrigin(0.5, 0.92)
-        .play({ key: 'tree.idle', startFrame: (r.id * 7) % 4 });
+        .sprite(r.tx * TILE + TILE / 2, r.ty * TILE + 56, `tree${n}`)
+        .setOrigin(0.5, TREE_ORIGIN[this.variant])
+        .play({ key: `tree${n}.play`, startFrame: r.id % 8 });
     } else if (k === 'goldMine') {
-      this.obj = scene.add.image(r.x, r.ty * TILE + r.def.h * TILE, 'goldmine_inactive').setOrigin(0.5, originY('goldmine_inactive'));
+      // jazida: pedra dourada centrada no footprint; encolhe conforme se esgota
+      this.obj = scene.add.sprite(r.x, r.y, 'gold_stone6').setOrigin(0.5, 0.5).setScale(1.25);
     } else {
-      this.obj = scene.add.sprite(r.x, r.y, 'sheep').setOrigin(0.5, 0.66).play({ key: 'sheep.idle', startFrame: r.id % 8 });
+      this.obj = scene.add.sprite(r.x, r.y, 'sheep_idle').setOrigin(0.5, 0.66).play({ key: 'sheep_idle.play', startFrame: r.id % 6 });
     }
-    this.obj.setDepth(this.obj.y);
+    this.obj.setDepth(k === 'goldMine' ? r.rect.y + r.rect.h - 8 : this.obj.y);
     this.hitSeq = r.hitSeq;
   }
 
+  private shake(): void {
+    const x = this.obj.x;
+    this.scene.tweens.add({ targets: this.obj, x: x + 3, duration: 50, yoyo: true, repeat: 1, onComplete: () => this.obj.setX(x) });
+  }
+
   sync(r: ResourceNode, alpha: number, visible: boolean): void {
-    this.obj.setVisible(visible);
+    this.obj.setVisible(visible && !this.pile);
     const k = r.def.kind;
     if (k === 'tree') {
       if (r.hitSeq !== this.hitSeq) {
         this.hitSeq = r.hitSeq;
-        const s = this.obj as Phaser.GameObjects.Sprite;
-        s.play('tree.hit');
-        s.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => s.active && s.play('tree.idle'));
+        this.shake();
       }
       return;
     }
     if (k === 'goldMine') {
-      const n = r.workers.size;
-      if ((n > 0) !== this.workers > 0) (this.obj as Phaser.GameObjects.Image).setTexture(n > 0 ? 'goldmine_active' : 'goldmine_inactive');
-      this.workers = n;
+      const size = Phaser.Math.Clamp(Math.ceil((r.amount / r.def.amount) * 6), 1, 6);
+      const shine = r.workers.size > 0;
+      if (size !== this.goldSize || shine !== this.goldShine) {
+        this.goldSize = size;
+        this.goldShine = shine;
+        if (shine) this.obj.play(`gold_stone${size}_hl.play`);
+        else this.obj.stop().setTexture(`gold_stone${size}`);
+      }
+      if (r.hitSeq !== this.hitSeq) {
+        this.hitSeq = r.hitSeq;
+        this.shake();
+      }
       return;
     }
     // ovelha
     if (r.isPile) {
       if (!this.pile) {
-        this.obj.setVisible(false);
-        this.pile = this.scene.add.sprite(r.x, r.y + 10, 'm_spawn').setOrigin(0.5, 0.77).setDepth(r.y);
-        this.pile.play('m_spawn.play');
-        this.pile.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.pile?.active && this.pile.setTexture('m_idle'));
+        this.pile = this.scene.add.image(r.x, r.y + 6, 'meat_res').setOrigin(0.5, 0.8).setDepth(r.y);
+        this.scene.tweens.add({ targets: this.pile, scale: { from: 0.4, to: 1 }, duration: 250, ease: 'Back.Out' });
       }
       this.pile.setVisible(visible);
       return;
     }
     const x = lerp(r.prevX, r.x, alpha);
     const y = lerp(r.prevY, r.y, alpha);
-    const s = this.obj as Phaser.GameObjects.Sprite;
     const moving = Math.abs(r.x - r.prevX) + Math.abs(r.y - r.prevY) > 0.05;
-    const want = moving ? 'sheep.bounce' : 'sheep.idle';
-    if (s.anims.currentAnim?.key !== want) s.play(want);
-    if (Math.abs(r.x - r.prevX) > 0.02) s.setFlipX(r.x < r.prevX);
-    s.setPosition(x, y).setDepth(y);
+    let want = this.obj.anims.currentAnim?.key ?? 'sheep_idle.play';
+    if (moving) want = 'sheep_move.play';
+    else if (want === 'sheep_move.play') want = 'sheep_idle.play';
+    else {
+      // parada: alterna entre olhar em volta e pastar
+      this.grazeTimer -= 1;
+      if (this.grazeTimer <= 0) {
+        this.grazeTimer = 120 + ((r.id * 37) % 180);
+        want = want === 'sheep_grass.play' ? 'sheep_idle.play' : 'sheep_grass.play';
+      }
+    }
+    if (this.obj.anims.currentAnim?.key !== want) this.obj.play(want);
+    if (Math.abs(r.x - r.prevX) > 0.02) this.obj.setFlipX(r.x < r.prevX);
+    this.obj.setPosition(x, y).setDepth(y);
   }
 
-  /** Recurso esgotado: árvore vira toco, mina fica destruída, ovelha some. */
+  /** Recurso esgotado: árvore vira toco (fica no mapa), ouro e carne somem. */
   deplete(): boolean {
-    const k = this.r.def.kind;
-    if (k === 'tree') {
-      (this.obj as Phaser.GameObjects.Sprite).play('tree.stump');
-      this.obj.setDepth(this.obj.y - 60);
-      return true;
-    }
-    if (k === 'goldMine') {
-      (this.obj as Phaser.GameObjects.Image).setTexture('goldmine_destroyed');
+    if (this.r.def.kind === 'tree') {
+      const n = this.variant + 1;
+      this.obj.stop().setTexture(`stump${n}`).setOrigin(0.5, STUMP_ORIGIN[this.variant]).setDepth(this.obj.y - 60);
       return true;
     }
     this.destroy();
@@ -282,33 +290,20 @@ export class ResourceView {
 // ------------------------------------------------------------------ projéteis
 
 export class ProjectileView {
-  readonly obj: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
-  private shadow: Phaser.GameObjects.Ellipse | null = null;
+  readonly obj: Phaser.GameObjects.Image;
   seen = 0;
 
   constructor(scene: Phaser.Scene, p: Projectile) {
-    if (p.type === 'arrow') {
-      this.obj = scene.add.image(p.x, p.y, 'arrow', 0).setOrigin(0.5);
-    } else {
-      this.obj = scene.add.sprite(p.x, p.y, 'dynamite').play('dynamite.spin');
-      this.shadow = scene.add.ellipse(p.x, p.y, 16, 6, 0x000000, 0.25);
-    }
+    this.obj = scene.add.image(p.x, p.y, `arrow_${teamColor(p.team)}`).setOrigin(0.5);
   }
 
   sync(p: Projectile, alpha: number, visible: boolean): void {
     const x = lerp(p.prevX, p.x, alpha);
     const y = lerp(p.prevY, p.y, alpha);
-    if (p.type === 'arrow') {
-      this.obj.setPosition(x, y - 24).setRotation(p.angle);
-    } else {
-      this.obj.setPosition(x, y - 16 - p.z);
-      this.shadow?.setPosition(x, y).setDepth(y - 1).setVisible(visible);
-    }
-    this.obj.setDepth(y + 60).setVisible(visible);
+    this.obj.setPosition(x, y - 24).setRotation(p.angle).setDepth(y + 60).setVisible(visible);
   }
 
   destroy(): void {
     this.obj.destroy();
-    this.shadow?.destroy();
   }
 }

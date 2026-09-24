@@ -6,8 +6,8 @@
 
 | Pacote | Uso no jogo | Licença |
 |---|---|---|
-| TS_old version (Update 010) | Cavaleiros, Goblins (Tocha, Dinamite, Barril), construções, recursos, terreno, UI | **CC0** (domínio público) |
-| Tiny Swords (Free Pack) | Quartel e ícones da interface (opcional) | Uso livre, inclusive comercial. **Proibido redistribuir** |
+| Tiny Swords (Free Pack) | Toda a arte principal: unidades, construções, terreno, recursos, efeitos, avatares e interface | Uso livre, inclusive comercial. **Proibido redistribuir** |
+| TS_old version (Update 010) | Só fundações de obra, ruínas e a caveira de morte | **CC0** (domínio público) |
 | Tiny Swords (Enemy Pack) | Não é usado | Pago (US$ 15). Nunca é baixado automaticamente |
 
 Os arquivos de arte **não fazem parte deste repositório**. Eles são baixados na sua máquina com `npm run assets`.

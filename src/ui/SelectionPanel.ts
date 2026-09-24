@@ -112,14 +112,17 @@ export class SelectionPanel {
   private unitInfo(u: Unit): void {
     const own = u.team === 0;
     const tx = this.header(S.units[u.def.id].name, own ? null : S.panel.enemy, (x, y, s) =>
-      portrait(this.scene, `${u.def.sheet}_${teamColor(u.team)}`, x, y, s),
+      portrait(this.scene, u.def.id, teamColor(u.team), x, y, s),
     );
     const barW = Math.min(200, this.w - (tx - this.x) - 10);
     const hpY = this.y + (own ? 44 : 62);
     this.hpBar(tx, hpY, barW, () => u.hp / u.maxHp);
     const hpText = this.text(tx, hpY + 18, '', 14);
-    const stats = this.text(tx, hpY + 40, fmt(S.panel.stats, { dmg: u.def.damage, armor: u.def.armor, range: Math.round(u.def.range / 64) || 1 }), 14);
-    void stats;
+    const range = Math.round(u.def.range / 64) || 1;
+    const statsText = u.def.attack === 'heal'
+      ? fmt(S.panel.healStats, { dmg: u.def.damage, range })
+      : fmt(S.panel.stats, { dmg: u.def.damage, armor: u.def.armor, range });
+    this.text(tx, hpY + 40, statsText, 14);
     const status = this.text(tx, hpY + 62, '', 14, COLORS.gold);
     this.dyn.push(() => {
       hpText.setText(fmt(S.panel.hp, { hp: Math.ceil(u.hp), max: u.maxHp }));
@@ -155,7 +158,7 @@ export class SelectionPanel {
       });
       bg.on('pointerover', () => bg.setStrokeStyle(2, 0xff9b8a));
       bg.on('pointerout', () => bg.setStrokeStyle(2, 0x6b4a2b));
-      this.add(portrait(this.scene, `${UNITS[item.unit].sheet}_${teamColor(b.team)}`, x, y, slot - 6));
+      this.add(portrait(this.scene, item.unit, teamColor(b.team), x, y, slot - 6));
       if (i === 0) {
         const bar = this.add(this.scene.add.rectangle(x - slot / 2, y + slot / 2 + 4, 0, 4, 0xf7d154).setOrigin(0, 0.5));
         this.dyn.push(() => {
@@ -169,10 +172,10 @@ export class SelectionPanel {
   private resourceInfo(r: ResourceNode): void {
     const key = r.def.kind === 'tree' ? 'resources.tree' : r.def.kind === 'goldMine' ? 'resources.goldMine' : r.isPile ? 'resources.meat' : 'resources.sheep';
     const info = key === 'resources.tree' ? S.resources.tree : key === 'resources.goldMine' ? S.resources.goldMine : r.isPile ? S.resources.meat : S.resources.sheep;
-    const thumbKey = r.def.kind === 'tree' ? 'w_idle' : r.def.kind === 'goldMine' ? 'goldmine_inactive' : 'm_idle';
+    const thumbKey = r.def.kind === 'tree' ? 'wood_res' : r.def.kind === 'goldMine' ? 'gold_stone6' : 'meat_res';
     const tx = this.header(info.name, null, (x, y, s) => {
       const img = this.scene.add.image(x, y, thumbKey);
-      img.setScale((s / Math.max(img.width, img.height)) * (thumbKey.endsWith('idle') ? 1.8 : 1.1));
+      img.setScale((s / Math.max(img.width, img.height)) * (thumbKey === 'gold_stone6' ? 1.4 : 1));
       return img;
     });
     const rem = this.text(tx, this.y + 50, '', 16, COLORS.gold);
@@ -199,7 +202,7 @@ export class SelectionPanel {
         if (p.event.shiftKey) s.setSelection(s.selection.filter((id) => id !== u.id));
         else s.setSelection([u.id]);
       });
-      this.add(portrait(this.scene, `${u.def.sheet}_${teamColor(u.team)}`, x, y - 2, size - 8));
+      this.add(portrait(this.scene, u.def.id, teamColor(u.team), x, y - 1, size - 4));
       const hb = this.add(this.scene.add.rectangle(x - size / 2 + 3, y + size / 2 - 4, size - 6, 3, COLORS.hpGood).setOrigin(0, 0.5));
       this.dyn.push(() => {
         const f = Math.max(0, u.hp / u.maxHp);

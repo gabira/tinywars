@@ -1,6 +1,7 @@
 import type { ResType } from '../data/types';
 
-export type TroopId = 'torch' | 'tnt' | 'barrel';
+export type TroopId = 'warrior' | 'lancer' | 'archer' | 'monk';
+export const TROOPS: readonly TroopId[] = ['warrior', 'lancer', 'archer', 'monk'];
 
 /** Escolhe o recurso com maior déficit de trabalhadores em relação à divisão desejada. */
 export function pickResource(
@@ -27,12 +28,15 @@ export function desiredSplit(hasCamp: boolean): Record<ResType, number> {
   return hasCamp ? { meat: 0.38, wood: 0.34, gold: 0.28 } : { meat: 0.45, wood: 0.45, gold: 0.1 };
 }
 
-/** Escolhe a próxima tropa pelo maior déficit em relação à proporção desejada. */
-export function chooseTroop(have: Record<TroopId, number>, mix: Record<TroopId, number>): TroopId {
-  const total = have.torch + have.tnt + have.barrel + 1;
-  let best: TroopId = 'torch';
+/**
+ * Escolhe, entre as tropas que o prédio treina (`options`), a de maior déficit
+ * em relação à proporção desejada. Devolve null se nenhuma opção estiver no mix.
+ */
+export function chooseTroop(have: Record<TroopId, number>, mix: Record<TroopId, number>, options: readonly TroopId[] = TROOPS): TroopId | null {
+  const total = TROOPS.reduce((n, t) => n + have[t], 0) + 1;
+  let best: TroopId | null = null;
   let bestDef = -Infinity;
-  for (const t of ['torch', 'tnt', 'barrel'] as TroopId[]) {
+  for (const t of options) {
     if (mix[t] <= 0) continue;
     const d = mix[t] * total - have[t];
     if (d > bestDef) {

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { GoblinAI } from '../ai/GoblinAI';
+import { RivalAI } from '../ai/RivalAI';
 import { SIM_DT, TILE } from '../config';
 import { BALANCE } from '../data/balance';
 import { UNITS } from '../data/units';
 import { Player } from '../entities/Player';
-import { explode } from './combat';
 import { World } from './World';
 
 const run = (w: World, seconds: number) => {
@@ -28,7 +27,7 @@ describe('World', () => {
   it('começa com bases, trabalhadores e recursos', () => {
     const w = new World({ seed: 1, difficulty: 'normal', fog: false });
     expect(w.mainBuilding(0)?.def.id).toBe('castle');
-    expect(w.mainBuilding(1)?.def.id).toBe('goblinHall');
+    expect(w.mainBuilding(1)?.def.id).toBe('castle');
     expect(w.units.filter((u) => u.team === 0).length).toBe(BALANCE.startWorkers);
     expect(w.resources.some((r) => r.def.kind === 'goldMine')).toBe(true);
     expect(w.players[0].popCap).toBe(10);
@@ -92,47 +91,72 @@ describe('World', () => {
     expect(w.players[0].popCap).toBe(15);
   });
 
-  it('dano de explosão atinge só inimigos no raio', () => {
+  it('monge cura sozinho um aliado ferido por perto', () => {
     const w = new World({ seed: 6, difficulty: 'normal', fog: false });
-    const a = w.units.find((u) => u.team === 0)!;
-    const friend = w.spawnUnit(1, 'torch', a.x + 10, a.y);
-    const far = w.spawnUnit(0, 'warrior', a.x + 400, a.y);
-    const hpA = a.hp;
-    explode(w, 1, a.x, a.y, 60, 20, 1, 0);
-    expect(a.hp).toBeLessThan(hpA);
-    expect(friend.hp).toBe(friend.maxHp);
-    expect(far.hp).toBe(far.maxHp);
+    const castle = w.mainBuilding(0)!;
+    const monk = w.spawnUnit(0, 'monk', castle.x, castle.y - 4 * TILE);
+    const hurt = w.spawnUnit(0, 'warrior', castle.x + 2 * TILE, castle.y - 4 * TILE);
+    const enemy = w.spawnUnit(1, 'warrior', castle.x + 80, castle.y - 4 * TILE);
+    enemy.alive = false; // só para garantir que monge não ataca: não há inimigos vivos
+    hurt.hp = 40;
+    run(w, 10);
+    expect(hurt.hp).toBeGreaterThan(40);
+    expect(monk.hp).toBe(monk.maxHp);
   });
 
-  it('guerreiro derrota goblin da tocha isolado', () => {
+  it('monge não ataca inimigos', () => {
+    const w = new World({ seed: 8, difficulty: 'normal', fog: false });
+    const castle = w.mainBuilding(0)!;
+    const monk = w.spawnUnit(0, 'monk', castle.x, castle.y - 4 * TILE);
+    const foe = w.spawnUnit(1, 'pawn', castle.x + 60, castle.y - 4 * TILE);
+    w.issue(0, { type: 'attack', unitIds: [monk.id], targetId: foe.id });
+    run(w, 5);
+    expect(foe.hp).toBe(foe.maxHp);
+    expect(monk.order?.type === 'attack').toBe(false);
+  });
+
+  it('guerreiro derrota arqueiro inimigo no corpo a corpo', () => {
     const w = new World({ seed: 7, difficulty: 'normal', fog: false });
     const castle = w.mainBuilding(0)!;
     const x = castle.x;
     const y = castle.y - 5 * TILE;
     const war = w.spawnUnit(0, 'warrior', x, y);
-    const torch = w.spawnUnit(1, 'torch', x + 3 * TILE, y);
-    w.issue(0, { type: 'attack', unitIds: [war.id], targetId: torch.id });
+    const archer = w.spawnUnit(1, 'archer', x + 3 * TILE, y);
+    w.issue(0, { type: 'attack', unitIds: [war.id], targetId: archer.id });
     run(w, 30);
-    expect(torch.alive).toBe(false);
+    expect(archer.alive).toBe(false);
     expect(war.alive).toBe(true);
+  });
+
+  it('lanceiro vence guerreiro (mais vida e armadura)', () => {
+    const w = new World({ seed: 9, difficulty: 'normal', fog: false });
+    const castle = w.mainBuilding(0)!;
+    const y = castle.y - 5 * TILE;
+    const lancer = w.spawnUnit(0, 'lancer', castle.x, y);
+    const war = w.spawnUnit(1, 'warrior', castle.x + 2 * TILE, y);
+    w.issue(0, { type: 'attack', unitIds: [lancer.id], targetId: war.id });
+    run(w, 40);
+    expect(war.alive).toBe(false);
+    expect(lancer.alive).toBe(true);
   });
 });
 
-describe('IA Goblin', () => {
+describe('IA do reino rival', () => {
   it('desenvolve a economia e ataca em uma partida simulada', () => {
     const w = new World({ seed: 11, difficulty: 'hard', fog: false });
-    const ai = new GoblinAI(w, 1);
+    const ai = new RivalAI(w, 1);
     w.controllers.push(ai);
     let waves = 0;
     w.events.on((e) => {
       if (e.type === 'attackWave') waves++;
     });
     run(w, 420);
-    const goblins = w.units.filter((u) => u.team === 1);
-    const workers = goblins.filter((u) => u.isWorker).length;
+    const rivals = w.units.filter((u) => u.team === 1);
+    const workers = rivals.filter((u) => u.isWorker).length;
     expect(workers).toBeGreaterThanOrEqual(8);
-    expect(w.buildings.some((b) => b.team === 1 && b.def.id === 'goblinCamp' && b.complete)).toBe(true);
-    expect(w.buildings.some((b) => b.team === 1 && b.def.id === 'goblinHut' && b.complete)).toBe(true);
+    expect(w.buildings.some((b) => b.team === 1 && b.def.id === 'barracks' && b.complete)).toBe(true);
+    expect(w.buildings.some((b) => b.team === 1 && b.def.id === 'house' && b.complete)).toBe(true);
+    expect(rivals.some((u) => u.def.id === 'archer' || u.def.id === 'lancer')).toBe(true);
     expect(waves).toBeGreaterThanOrEqual(1);
   }, 60_000);
 });

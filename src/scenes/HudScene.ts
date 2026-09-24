@@ -8,7 +8,8 @@ import { CARD_W, CommandCardView } from '../ui/CommandCardView';
 import { Minimap } from '../ui/Minimap';
 import { SelectionPanel } from '../ui/SelectionPanel';
 import { Toasts } from '../ui/Toasts';
-import { ribbon, scrollPanel, textButton, textStyle, woodPanel, darkText } from '../ui/widgets';
+import { portrait } from '../ui/icons';
+import { paperPanel, ribbon, scrollPanel, textButton, textStyle, woodPanel, darkText } from '../ui/widgets';
 import type { GameScene } from './GameScene';
 
 /** Interface por cima do mundo: recursos, minimapa, seleção, comandos, avisos e menus. */
@@ -60,46 +61,45 @@ export class HudScene extends Phaser.Scene {
     const { width: W, height: H } = this.scale;
     this.staticLayer.removeAll(true);
 
-    // barra superior
-    const top = this.add.nineslice(0, 0, 'ui_carved3', undefined, W / 0.625, 64, 64, 64, 0, 0).setOrigin(0).setScale(0.625);
+    // barra superior: papel do Free Pack com recursos (ícones do pacote) e relógio
+    const top = paperPanel(this, -6, -8, W + 12, HUD_TOP + 10, 0.36);
     this.staticLayer.add(top);
-    const resIcons: [string, string, string][] = [
-      ['gold', 'icon_gold', 'g_idle'],
-      ['wood', 'icon_wood', 'w_idle'],
-      ['meat', 'icon_meat', 'm_idle'],
+    const cy = HUD_TOP / 2 - 1;
+    const resIcons: [string, string][] = [
+      ['gold', 'icon_03'],
+      ['wood', 'icon_02'],
+      ['meat', 'icon_04'],
     ];
-    let x = 16;
-    for (const [res, pref, fb] of resIcons) {
-      const key = this.textures.exists(pref) ? pref : fb;
-      const icon = this.add.image(x + 12, HUD_TOP / 2 - 2, key);
-      icon.setScale((key === pref ? 30 : 46) / icon.width);
-      const t = this.add.text(x + 30, HUD_TOP / 2 - 2, '', textStyle(18)).setOrigin(0, 0.5);
+    let x = 18;
+    for (const [res, key] of resIcons) {
+      const icon = this.add.image(x + 14, cy, key).setDisplaySize(34, 34);
+      const t = this.add.text(x + 36, cy, '', darkText(20)).setOrigin(0, 0.5);
       this.staticLayer.add([icon, t]);
       this.resTexts[res] = t;
-      x += 150;
+      x += 140;
     }
-    const popIcon = this.add.image(x + 12, HUD_TOP / 2 - 2, `house_${teamColor(0)}`).setScale(0.2);
-    const pop = this.add.text(x + 30, HUD_TOP / 2 - 2, '', textStyle(18)).setOrigin(0, 0.5);
+    const popIcon = portrait(this, 'pawn', teamColor(0), x + 14, cy, 34);
+    const pop = this.add.text(x + 36, cy, '', darkText(20)).setOrigin(0, 0.5);
     this.staticLayer.add([popIcon, pop]);
     this.resTexts.pop = pop;
 
-    this.clock = this.add.text(W / 2, HUD_TOP / 2 - 2, '', textStyle(18)).setOrigin(0.5);
+    this.clock = this.add.text(W / 2, cy, '', darkText(20)).setOrigin(0.5);
     this.staticLayer.add(this.clock);
     const menuBtn = this.add
-      .image(W - 26, HUD_TOP / 2 - 1, 'ui_btn_blue')
-      .setDisplaySize(34, 34)
+      .image(W - 30, cy, 'ui_btn_tiny_blue')
+      .setDisplaySize(40, 40)
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => {
         this.s.paused = true;
         this.togglePause(true);
       });
-    const gear = this.add.image(W - 26, HUD_TOP / 2 - 3, this.textures.exists('icon_gear') ? 'icon_gear' : 'ui_icon_gear').setDisplaySize(24, 24);
-    const menuLabel = this.add.text(W - 48, HUD_TOP / 2 - 2, S.menu.menu, textStyle(16)).setOrigin(1, 0.5);
+    const gear = this.add.image(W - 30, cy - 2, 'icon_10').setDisplaySize(28, 28);
+    const menuLabel = this.add.text(W - 56, cy, S.menu.menu, darkText(18)).setOrigin(1, 0.5);
     this.staticLayer.add([menuBtn, gear, menuLabel]);
 
     // painel inferior
     const py = H - HUD_BOTTOM;
-    const bottom = woodPanel(this, 0, py, W, HUD_BOTTOM + 8, 0.5);
+    const bottom = woodPanel(this, -10, py - 6, W + 20, HUD_BOTTOM + 30, 0.5);
     this.staticLayer.add(bottom);
     this.staticLayer.sendToBack(bottom);
     this.minimap.setPosition(18, py + (HUD_BOTTOM - this.minimap.height) / 2);
@@ -124,7 +124,7 @@ export class HudScene extends Phaser.Scene {
     this.resTexts.gold.setText(`${p.res.gold}`);
     this.resTexts.wood.setText(`${p.res.wood}`);
     this.resTexts.meat.setText(`${p.res.meat}`);
-    this.resTexts.pop.setText(`${p.pop}/${p.popCap}`).setColor(p.pop >= p.popCap ? COLORS.bad : COLORS.text);
+    this.resTexts.pop.setText(`${p.pop}/${p.popCap}`).setColor(p.pop >= p.popCap ? '#b3261e' : COLORS.textDark);
     this.clock.setText(clockText(w.time));
     this.minimap.update(time);
     this.panel.update();
@@ -169,7 +169,7 @@ export class HudScene extends Phaser.Scene {
     const c = this.add.container(0, 0).setDepth(2000);
     const shade = this.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0).setInteractive();
     const panel = scrollPanel(this, W / 2, H / 2, 460, 470);
-    const title = ribbon(this, W / 2, H / 2 - 214, 340, won ? S.end.victory : S.end.defeat, won ? 'blue' : 'red', 34);
+    const title = ribbon(this, W / 2, H / 2 - 214, 340, won ? S.end.victory : S.end.defeat, teamColor(won ? 0 : 1), 34);
     const lines = [
       won ? S.end.victoryText : S.end.defeatText,
       '',

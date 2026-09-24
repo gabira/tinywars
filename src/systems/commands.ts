@@ -1,11 +1,11 @@
 import { TILE } from '../config';
 import { BALANCE } from '../data/balance';
 import { BUILDINGS } from '../data/buildings';
-import { TEAMS } from '../data/factions';
 import type { BuildingId, ResType, Team, UnitId } from '../data/types';
 import { UNITS } from '../data/units';
 import type { Unit } from '../entities/Entity';
 import { setOrder } from './behaviors';
+import { isHealer } from './combat';
 import { canPlace } from './economy';
 import { moveToPoint, stopMoving } from './movement';
 import type { World } from './World';
@@ -13,6 +13,7 @@ import type { World } from './World';
 export type Command =
   | { type: 'move'; unitIds: number[]; x: number; y: number; queue?: boolean; attack?: boolean }
   | { type: 'attack'; unitIds: number[]; targetId: number; queue?: boolean }
+  | { type: 'heal'; unitIds: number[]; targetId: number; queue?: boolean }
   | { type: 'gather'; unitIds: number[]; nodeId: number; queue?: boolean }
   | { type: 'returnCargo'; unitIds: number[]; queue?: boolean }
   | { type: 'build'; unitIds: number[]; building: BuildingId; tx: number; ty: number; queue?: boolean }
@@ -112,7 +113,17 @@ export function issueCommand(world: World, team: Team, cmd: Command): CommandRes
       const units = ownUnits(world, team, cmd.unitIds);
       const t = world.get(cmd.targetId);
       if (!units.length || !t || !t.alive || t.kind === 'resource' || t.team === team) return fail('invalid');
-      for (const u of units) setOrder(world, u, { type: 'attack', targetId: t.id }, cmd.queue);
+      // monges não atacam: acompanham o grupo até o alvo
+      const healers = units.filter(isHealer);
+      for (const u of units) if (!isHealer(u)) setOrder(world, u, { type: 'attack', targetId: t.id }, cmd.queue);
+      if (healers.length) groupMove(world, healers, t.x, t.y, true, !!cmd.queue);
+      return OK;
+    }
+    case 'heal': {
+      const healers = ownUnits(world, team, cmd.unitIds).filter(isHealer);
+      const t = world.getUnit(cmd.targetId);
+      if (!healers.length || !t || !t.alive || t.team !== team) return fail('invalid');
+      for (const u of healers) setOrder(world, u, { type: 'heal', targetId: t.id }, cmd.queue);
       return OK;
     }
     case 'gather': {
@@ -131,7 +142,7 @@ export function issueCommand(world: World, team: Team, cmd: Command): CommandRes
       const def = BUILDINGS[cmd.building];
       const workers = ownUnits(world, team, cmd.unitIds).filter((u) => u.isWorker);
       if (!workers.length) return fail('noWorkers');
-      if (def.faction !== TEAMS[team].faction || def.main) return fail('invalid');
+      if (def.main) return fail('invalid');
       if (def.requires && !world.buildings.some((b) => b.alive && b.team === team && b.complete && b.def.id === def.requires))
         return fail('requires', { requires: def.requires });
       if (!canPlace(world, team, def, cmd.tx, cmd.ty)) return fail('invalidPlacement');
@@ -200,7 +211,7 @@ export function issueCommand(world: World, team: Team, cmd: Command): CommandRes
   }
 }
 
-export type SmartKind = 'move' | 'attack' | 'gather' | 'build' | 'none';
+export type SmartKind = 'move' | 'attack' | 'gather' | 'build' | 'heal' | 'none';
 
 /** Clique direito contextual: decide o que cada unidade selecionada deve fazer. */
 export function smartCommand(
@@ -222,6 +233,14 @@ export function smartCommand(
   if (t && t.alive && t.kind !== 'resource' && t.team !== team) {
     issueCommand(world, team, { type: 'attack', unitIds: ids(units), targetId: t.id, queue });
     return 'attack';
+  }
+  // monges: clique direito num aliado ferido = curar
+  const healers = units.filter(isHealer);
+  if (t && t.alive && t.kind === 'unit' && t.team === team && t.hp < t.maxHp && healers.length) {
+    issueCommand(world, team, { type: 'heal', unitIds: ids(healers), targetId: t.id, queue });
+    const rest = units.filter((u) => !isHealer(u));
+    if (rest.length) issueCommand(world, team, { type: 'move', unitIds: ids(rest), x, y, queue });
+    return 'heal';
   }
   if (t && t.alive && t.kind === 'resource' && workers.length) {
     issueCommand(world, team, { type: 'gather', unitIds: ids(workers), nodeId: t.id, queue });

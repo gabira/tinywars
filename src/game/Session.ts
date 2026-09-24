@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GoblinAI } from '../ai/GoblinAI';
+import { RivalAI } from '../ai/RivalAI';
 import { DEBUG } from '../config';
 import type { DifficultyLevel } from '../data/difficulty';
 import type { BuildingId } from '../data/types';
@@ -11,7 +11,7 @@ export type InputMode = 'normal' | 'place' | 'attackMove';
 /** Estado compartilhado entre GameScene (mundo) e HudScene (interface). */
 export class Session {
   readonly world: World;
-  readonly ai: GoblinAI;
+  readonly ai: RivalAI;
   readonly ui = new Phaser.Events.EventEmitter();
   selection: number[] = [];
   mode: InputMode = 'normal';
@@ -29,7 +29,7 @@ export class Session {
     readonly color: TeamColor,
   ) {
     this.world = new World({ seed, difficulty, fog: !DEBUG.noFog });
-    this.ai = new GoblinAI(this.world, 1);
+    this.ai = new RivalAI(this.world, 1);
     this.world.controllers.push(this.ai);
     if (DEBUG.fast) this.speed = 4;
   }

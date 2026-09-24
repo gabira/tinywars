@@ -28,7 +28,11 @@ export abstract class Entity {
   }
 }
 
-export type UnitAnim = 'idle' | 'run' | 'attack' | 'chop' | 'build' | 'carryIdle' | 'carryRun';
+/** Estado visual da unidade (a view escolhe a tira certa para cada tipo de unidade). */
+export type UnitAnim = 'idle' | 'run' | 'attack' | 'work' | 'carryIdle' | 'carryRun' | 'guard';
+
+/** Ferramenta que o peão leva na mão (define as tiras "Run Axe", "Interact Pickaxe"...). */
+export type Tool = 'axe' | 'hammer' | 'knife' | 'pickaxe';
 
 export class Unit extends Entity {
   readonly kind = 'unit' as const;
@@ -72,6 +76,7 @@ export class Unit extends Entity {
   facingX = 1;
   facingY = 0;
   anim: UnitAnim = 'idle';
+  tool: Tool | null = null;
 
   constructor(
     id: number,
@@ -167,17 +172,15 @@ export class ResourceNode extends Entity {
 
 export class Projectile {
   alive = true;
-  t = 0;
-  z = 0;
   angle = 0;
   prevX: number;
   prevY: number;
   x: number;
   y: number;
 
+  /** Flecha teleguiada até o alvo (arqueiros e torres). */
   constructor(
     readonly id: number,
-    readonly type: 'arrow' | 'dynamite',
     readonly team: Team,
     readonly sx: number,
     readonly sy: number,
@@ -185,10 +188,6 @@ export class Projectile {
     public ty: number,
     readonly targetId: number,
     readonly damage: number,
-    readonly splash: number,
-    readonly buildingBonus: number,
-    readonly duration: number,
-    readonly arcHeight: number,
     readonly attackerId: number,
   ) {
     this.x = sx;

@@ -6,6 +6,8 @@ import { Building, Projectile, Unit, type AnyEntity } from '../entities/Entity';
 import { stopMoving } from './movement';
 import type { World } from './World';
 
+const ARROW_SPEED = 600;
+
 /** Distância da borda de `u` até a borda do alvo. */
 export function edgeDistance(u: { x: number; y: number; radius: number }, t: AnyEntity): number {
   if (t.kind === 'building') return distToRect(u.x, u.y, t.rect) - u.radius;
@@ -30,10 +32,19 @@ export function faceTowards(u: Unit, x: number, y: number): void {
   u.facingY = dy / d;
 }
 
+export const isHealer = (u: Unit): boolean => u.def.attack === 'heal';
+
+/** Pode atacar o alvo? (monges não atacam). */
 export function canAttack(u: Unit, t: AnyEntity | undefined): t is Unit | Building {
-  return !!t && t.alive && t.kind !== 'resource' && t.team !== u.team && !(t.kind === 'unit' && t.hidden);
+  return !!t && !isHealer(u) && t.alive && t.kind !== 'resource' && t.team !== u.team && !(t.kind === 'unit' && t.hidden);
 }
 
+/** O monge pode curar este aliado? */
+export function canHeal(u: Unit, t: AnyEntity | undefined): t is Unit {
+  return !!t && isHealer(u) && t.kind === 'unit' && t.alive && t.team === u.team && t !== u && !t.hidden && t.hp < t.maxHp;
+}
+
+/** Inicia um golpe, disparo ou cura: o efeito acontece depois do `windup`. */
 export function startAttack(u: Unit, t: Unit | Building): void {
   const p = aimPoint(u, t);
   faceTowards(u, p.x, p.y);
@@ -45,13 +56,14 @@ export function startAttack(u: Unit, t: Unit | Building): void {
   u.anim = 'attack';
 }
 
-/** Chamado quando o "windup" termina: aplica o golpe ou dispara o projétil. */
+/** Chamado quando o "windup" termina: aplica o golpe, dispara a flecha ou cura. */
 export function resolveAttack(world: World, u: Unit): void {
   const t = world.get(u.pendingTargetId);
   const def = u.def;
-  if (def.attack === 'suicide') {
-    explode(world, u.team, u.x, u.y, def.splash ?? 64, def.damage, def.buildingBonus ?? 1, u.id);
-    kill(world, u, u.team === 0 ? 1 : 0);
+  if (def.attack === 'heal') {
+    if (!canHeal(u, t)) return;
+    t.hp = Math.min(t.maxHp, t.hp + def.damage);
+    world.events.emit({ type: 'healed', id: t.id, x: t.x, y: t.y, team: t.team });
     return;
   }
   if (!canAttack(u, t)) return;
@@ -60,30 +72,12 @@ export function resolveAttack(world: World, u: Unit): void {
     return;
   }
   const p = aimPoint(u, t);
-  if (def.attack === 'arrow') {
-    const d = Math.hypot(p.x - u.x, p.y - u.y);
-    world.addProjectile(
-      new Projectile(world.newId(), 'arrow', u.team, u.x, u.y - 8, p.x, p.y, t.id, def.damage, 0, 1, d / 600, 0, u.id),
-    );
-  } else if (def.attack === 'dynamite') {
-    // mira um pouco à frente de alvos em movimento
-    let tx = p.x;
-    let ty = p.y;
-    if (t.kind === 'unit' && t.moving) {
-      tx += (t.x - t.prevX) * 8;
-      ty += (t.y - t.prevY) * 8;
-    }
-    const d = Math.hypot(tx - u.x, ty - u.y);
-    world.addProjectile(
-      new Projectile(world.newId(), 'dynamite', u.team, u.x, u.y - 8, tx, ty, 0, def.damage, def.splash ?? 48, 1, 0.45 + d / 700, 40 + d * 0.2, u.id),
-    );
-  }
+  world.addProjectile(new Projectile(world.newId(), u.team, u.x, u.y - 8, p.x, p.y, t.id, def.damage, u.id));
 }
 
 export function dealDamage(world: World, team: Team, t: Unit | Building, amount: number, attackerId: number): void {
   if (!t.alive) return;
-  const armor = t.kind === 'unit' ? t.def.armor : t.def.armor;
-  const dmg = Math.max(1, Math.round(amount - armor));
+  const dmg = Math.max(1, Math.round(amount - t.def.armor));
   t.hp -= dmg;
   const victim = world.players[t.team];
   if (world.time - victim.lastAttackAlert > 12) {
@@ -103,7 +97,7 @@ export function dealDamage(world: World, team: Team, t: Unit | Building, amount:
 function retaliate(world: World, victim: Unit, attackerId: number): void {
   const attacker = world.getUnit(attackerId);
   if (!attacker || !attacker.alive) return;
-  if (!victim.order && !victim.isWorker && !victim.queue.length) {
+  if (!victim.order && !victim.isWorker && !isHealer(victim) && !victim.queue.length) {
     victim.order = { type: 'attack', targetId: attacker.id, auto: true };
     victim.anchor = { x: victim.x, y: victim.y };
   }
@@ -114,33 +108,10 @@ function callForHelp(world: World, team: Team, x: number, y: number, attackerId:
   const attacker = world.get(attackerId);
   if (!attacker || !attacker.alive) return;
   for (const a of world.units) {
-    if (a.team !== team || a.isWorker || a.order || a.queue.length || !a.alive) continue;
+    if (a.team !== team || a.isWorker || isHealer(a) || a.order || a.queue.length || !a.alive) continue;
     if (Math.hypot(a.x - x, a.y - y) > BALANCE.helpRadius) continue;
     a.order = { type: 'attack', targetId: attackerId, auto: true };
     a.anchor = { x: a.x, y: a.y };
-  }
-}
-
-/** Explosão com dano em área contra inimigos (unidades e construções). */
-export function explode(
-  world: World,
-  team: Team,
-  x: number,
-  y: number,
-  radius: number,
-  damage: number,
-  buildingBonus: number,
-  attackerId: number,
-): void {
-  world.events.emit({ type: 'explosion', x, y, radius, team });
-  for (const u of world.units) {
-    if (!u.alive || u.team === team || u.hidden) continue;
-    const d = Math.hypot(u.x - x, u.y - y) - u.radius;
-    if (d <= radius) dealDamage(world, team, u, damage * (d <= radius * 0.4 ? 1 : 0.6), attackerId);
-  }
-  for (const b of world.buildings) {
-    if (!b.alive || b.team === team) continue;
-    if (distToRect(x, y, b.rect) <= radius) dealDamage(world, team, b, damage * buildingBonus, attackerId);
   }
 }
 
@@ -174,6 +145,8 @@ export function findTarget(world: World, u: { x: number; y: number; team: Team }
     let score = d;
     if (o.isWorker) score += 60;
     if (o.order?.type === 'attack' || o.windupTimer >= 0) score -= 80;
+    // monges inimigos são alvos valiosos
+    if (isHealer(o)) score -= 30;
     if (score < bestScore) {
       bestScore = score;
       best = o;
@@ -193,64 +166,63 @@ export function findTarget(world: World, u: { x: number; y: number; team: Team }
   return best;
 }
 
-/** Torres atiram automaticamente no inimigo mais próximo. */
+/** Aliado ferido mais necessitado dentro de `radius` (para monges). */
+export function findWounded(world: World, u: Unit, radius: number): Unit | null {
+  world.unitHash.query(u.x, u.y, radius + 24, scan);
+  let best: Unit | null = null;
+  let bestScore = Infinity;
+  for (const o of scan) {
+    if (!canHeal(u, o)) continue;
+    const d = Math.hypot(o.x - u.x, o.y - u.y);
+    if (d > radius) continue;
+    const score = (o.hp / o.maxHp) * 300 + d * 0.5;
+    if (score < bestScore) {
+      bestScore = score;
+      best = o;
+    }
+  }
+  return best;
+}
+
+/** Torres atiram flechas automaticamente no inimigo mais próximo. */
 export function updateTowers(world: World, dt: number): void {
   for (const b of world.buildings) {
     const atk = b.def.attack;
     if (!atk || !b.complete || !b.alive) continue;
     b.cooldown -= dt;
     if (b.cooldown > 0) continue;
-    const src = { x: b.x, y: b.y - TILE * 0.8, team: b.team };
     const t = findTarget(world, { x: b.x, y: b.y, team: b.team }, atk.range);
     if (!t) continue;
     b.cooldown = atk.cooldown;
     b.attackSeq++;
+    const src = { x: b.x, y: b.y - TILE * 1.6 };
     const p = aimPoint(src, t);
-    const d = Math.hypot(p.x - src.x, p.y - src.y);
-    if (atk.projectile === 'arrow') {
-      world.addProjectile(new Projectile(world.newId(), 'arrow', b.team, src.x, src.y, p.x, p.y, t.id, atk.damage, 0, 1, d / 600, 0, b.id));
-    } else {
-      world.addProjectile(
-        new Projectile(world.newId(), 'dynamite', b.team, src.x, src.y, p.x, p.y, 0, atk.damage, atk.splash ?? 40, 1, 0.45 + d / 700, 30 + d * 0.15, b.id),
-      );
-    }
+    world.addProjectile(new Projectile(world.newId(), b.team, src.x, src.y, p.x, p.y, t.id, atk.damage, b.id));
   }
 }
 
 export function updateProjectiles(world: World, dt: number): void {
   for (const p of world.projectiles) {
     if (!p.alive) continue;
-    if (p.type === 'arrow') {
-      const t = world.get(p.targetId);
-      if (t && t.alive && t.kind !== 'resource') {
-        const a = aimPoint({ x: p.x, y: p.y }, t);
-        p.tx = a.x;
-        p.ty = a.y;
-      }
-      const dx = p.tx - p.x;
-      const dy = p.ty - p.y;
-      const d = Math.hypot(dx, dy);
-      const step = 600 * dt;
-      p.angle = Math.atan2(dy, dx);
-      if (d <= step + 4) {
-        p.x = p.tx;
-        p.y = p.ty;
-        p.alive = false;
-        if (t && t.alive && t.kind !== 'resource' && t.team !== p.team) dealDamage(world, p.team, t, p.damage, p.attackerId);
-      } else {
-        p.x += (dx / d) * step;
-        p.y += (dy / d) * step;
-      }
+    const t = world.get(p.targetId);
+    if (t && t.alive && t.kind !== 'resource') {
+      const a = aimPoint({ x: p.x, y: p.y }, t);
+      p.tx = a.x;
+      p.ty = a.y;
+    }
+    const dx = p.tx - p.x;
+    const dy = p.ty - p.y;
+    const d = Math.hypot(dx, dy);
+    const step = ARROW_SPEED * dt;
+    p.angle = Math.atan2(dy, dx);
+    if (d <= step + 4) {
+      p.x = p.tx;
+      p.y = p.ty;
+      p.alive = false;
+      if (t && t.alive && t.kind !== 'resource' && t.team !== p.team) dealDamage(world, p.team, t, p.damage, p.attackerId);
     } else {
-      p.t += dt / p.duration;
-      const t = Math.min(1, p.t);
-      p.x = p.sx + (p.tx - p.sx) * t;
-      p.y = p.sy + (p.ty - p.sy) * t;
-      p.z = 4 * p.arcHeight * t * (1 - t);
-      if (p.t >= 1) {
-        p.alive = false;
-        explode(world, p.team, p.tx, p.ty, p.splash, p.damage, p.buildingBonus, p.attackerId);
-      }
+      p.x += (dx / d) * step;
+      p.y += (dy / d) * step;
     }
   }
 }

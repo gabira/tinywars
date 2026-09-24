@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { registerAnimations } from '../assets/animations';
 import { queueBaseAssets, queueTeamAssets } from '../assets/loader';
+import { buildUiTextures } from '../ui/nineslices';
+import { cssCursor } from '../ui/cursors';
 import { DEBUG, FONT } from '../config';
 import { loadColor } from '../game/prefs';
 import { S } from '../i18n/t';
@@ -47,6 +49,8 @@ export class PreloadScene extends Phaser.Scene {
       barBg.destroy();
       bar.destroy();
       registerAnimations(this);
+      buildUiTextures(this);
+      this.input.setDefaultCursor(cssCursor('default'));
       this.scene.start(DEBUG.anims ? 'DebugAnim' : 'Menu');
     });
     this.load.start();

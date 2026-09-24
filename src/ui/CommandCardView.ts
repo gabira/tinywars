@@ -48,8 +48,11 @@ export class CommandCardView {
     const row = Math.floor(b.slot / 3);
     const cx = this.x + col * (SIZE + GAP) + SIZE / 2;
     const cy = this.y + row * (SIZE + GAP) + SIZE / 2;
-    const normal = b.enabled ? 'ui_btn_blue' : 'ui_btn_disable';
-    const bg = this.scene.add.image(cx, cy, b.active ? 'ui_btn_hover' : normal).setDisplaySize(SIZE + 6, SIZE + 6).setInteractive({ useHandCursor: true });
+    // botão quadrado do Free Pack (área útil de 90 px no quadro de 128)
+    const scale = (SIZE + 4) / 90;
+    const bg = this.scene.add.image(cx, cy, 'ui_btn_sq_blue').setScale(scale).setInteractive({ useHandCursor: true });
+    const tint = () => (b.active ? bg.setTint(0xfff0a0) : b.enabled ? bg.clearTint() : bg.setTint(0x9a9a9a));
+    tint();
     this.root.add(bg);
     const icon = iconFor(this.scene, b.icon, cx, cy - 2, SIZE - 16);
     if (icon) {
@@ -60,16 +63,17 @@ export class CommandCardView {
       this.root.add(this.scene.add.text(cx + SIZE / 2 - 5, cy + SIZE / 2 - 7, b.hotkey, textStyle(12)).setOrigin(1, 1));
     }
     bg.on('pointerover', () => {
-      if (!b.active) bg.setTexture('ui_btn_hover');
+      bg.setScale(scale * 1.06);
       this.showTip(b, cx, cy);
     });
     bg.on('pointerout', () => {
-      bg.setTexture(b.active ? 'ui_btn_hover' : normal);
+      bg.setScale(scale).setTexture('ui_btn_sq_blue');
+      tint();
       this.tip.setVisible(false);
     });
-    bg.on('pointerdown', () => bg.setTexture('ui_btn_blue_pressed'));
+    bg.on('pointerdown', () => bg.setTexture('ui_btn_sq_blue_p'));
     bg.on('pointerup', () => {
-      bg.setTexture(normal);
+      bg.setTexture('ui_btn_sq_blue');
       b.action();
       this.session.ui.emit('selection');
     });
@@ -105,7 +109,7 @@ export class CommandCardView {
     }
     const w = Math.max(...texts.map((t) => t.width)) + 24;
     const h = yy + 8;
-    const panel = woodPanel(this.scene, 0, 0, Math.max(w, 70), Math.max(h, 70), 0.5);
+    const panel = woodPanel(this.scene, -6, -6, w + 12, h + 12, 0.35);
     this.tip.add([panel, ...texts]);
     const { width } = this.scene.scale;
     const tx = Math.min(width - w - 8, bx - w / 2);

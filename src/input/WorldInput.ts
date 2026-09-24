@@ -8,12 +8,13 @@ import type { Session } from '../game/Session';
 import { S } from '../i18n/t';
 import type { Overlay } from '../render/Overlay';
 import { teamColor } from '../render/palette';
-import { originY, teamVisual } from '../render/visuals';
+import { buildingVisual, originY } from '../render/visuals';
 import { canPlace } from '../systems/economy';
+import { cssCursor, type CursorKind } from '../ui/cursors';
 import { smartCommand } from '../systems/commands';
 import type { CameraController } from './CameraController';
 
-const MARK = { move: 0x7cff7c, attack: 0xff5a5a, gather: 0xf7d154, build: 0x5aa9e6, none: 0xffffff };
+const MARK = { move: 0x7cff7c, attack: 0xff5a5a, gather: 0xf7d154, build: 0x5aa9e6, heal: 0xb6f36b, none: 0xffffff };
 
 export class WorldInput {
   private drag: { sx: number; sy: number; wx: number; wy: number } | null = null;
@@ -27,6 +28,7 @@ export class WorldInput {
   private idleCursor = 0;
   /** O Phaser reprocessa a fila de teclas do quadro a cada evento novo: guarda os já tratados. */
   private handledKeys = new WeakSet<KeyboardEvent>();
+  private cursorKind: CursorKind | '' = '';
 
   constructor(
     private scene: Phaser.Scene,
@@ -199,7 +201,7 @@ export class WorldInput {
     if (this.ghostKey !== def.id) {
       this.ghostObj?.destroy();
       this.ghostObj = this.scene.add.container(0, 0).setDepth(5.5e5);
-      for (const part of teamVisual(this.scene.textures, def.id, teamColor(0)).parts) {
+      for (const part of buildingVisual(def.id, teamColor(0)).parts) {
         if (!this.scene.textures.exists(part.key)) continue;
         const img = this.scene.add.image(part.dx, part.dy, part.key, 0).setOrigin(0.5, originY(part.key) ?? 1).setFlipX(!!part.flip);
         this.ghostObj.add(img);
@@ -301,11 +303,15 @@ export class WorldInput {
     this.hoverId = t?.id ?? 0;
     const canvas = this.scene.game.canvas;
     const s = this.session;
-    let cursor = 'default';
-    if (s.mode === 'attackMove') cursor = 'crosshair';
-    else if (t && t.kind !== 'resource' && t.team !== 0 && selectedOwnUnits(s).length) cursor = 'crosshair';
-    else if (t) cursor = 'pointer';
-    if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
+    let kind: CursorKind = 'default';
+    if (s.mode === 'attackMove') kind = 'attack';
+    else if (s.mode === 'place') kind = this.ghost && !this.ghost.ok ? 'forbidden' : 'default';
+    else if (t && t.kind !== 'resource' && t.team !== 0 && selectedOwnUnits(s).length) kind = 'attack';
+    else if (t) kind = 'pointer';
+    if (kind !== this.cursorKind) {
+      this.cursorKind = kind;
+      canvas.style.cursor = cssCursor(kind);
+    }
   }
 
   destroy(): void {

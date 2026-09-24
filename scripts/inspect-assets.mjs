@@ -1,6 +1,6 @@
 // Inspeciona as spritesheets extraídas: dimensões, grade provável e quadros não vazios por linha.
 //   npm run assets:inspect                 → todos os PNGs
-//   npm run assets:inspect -- Goblins      → filtra por trecho do caminho
+//   npm run assets:inspect -- "Blue Units"  → filtra por trecho do caminho
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

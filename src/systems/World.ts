@@ -11,7 +11,7 @@ import type { BuildingId, Team, UnitId } from '../data/types';
 import { UNITS } from '../data/units';
 import { AnyEntity, Building, Projectile, ResourceNode, Unit } from '../entities/Entity';
 import { Player } from '../entities/Player';
-import { generateMap, type GameMap } from '../map/MapGenerator';
+import { generateMap, reliefBlocked, type GameMap } from '../map/MapGenerator';
 import { NavGrid } from '../map/NavGrid';
 import { AStar } from './pathfinding/AStar';
 import { PathService } from './pathfinding/PathService';
@@ -66,6 +66,9 @@ export class World {
     this.difficulty = DIFFICULTIES[opts.difficulty];
     this.map = generateMap(opts.seed);
     this.nav = new NavGrid(this.map.w, this.map.h, this.map.land);
+    // planaltos e penhascos são intransponíveis
+    for (let y = 0; y < this.map.h; y++)
+      for (let x = 0; x < this.map.w; x++) if (reliefBlocked(this.map, x, y)) this.nav.blockRect(x, y, 1, 1);
     this.astar = new AStar(this.nav);
     this.paths = new PathService(this);
     this.vision = new Vision(this, opts.fog ?? true);

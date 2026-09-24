@@ -2,27 +2,19 @@ export type Team = 0 | 1;
 export const PLAYER: Team = 0;
 export const AI: Team = 1;
 
-export type Faction = 'knights' | 'goblins';
 export type ResType = 'gold' | 'wood' | 'meat';
 export const RES_TYPES: readonly ResType[] = ['gold', 'wood', 'meat'];
 export type Cost = Partial<Record<ResType, number>>;
 
-export type UnitId = 'pawn' | 'warrior' | 'archer' | 'servant' | 'torch' | 'tnt' | 'barrel';
-export type BuildingId =
-  | 'castle'
-  | 'house'
-  | 'barracks'
-  | 'tower'
-  | 'goblinHall'
-  | 'goblinHut'
-  | 'goblinCamp'
-  | 'woodTower';
+// Os dois reinos têm as mesmas unidades e construções (só a cor muda).
+export type UnitId = 'pawn' | 'warrior' | 'lancer' | 'archer' | 'monk';
+export type BuildingId = 'castle' | 'house' | 'barracks' | 'archery' | 'monastery' | 'tower';
 
-export type AttackKind = 'melee' | 'arrow' | 'dynamite' | 'suicide';
+/** melee: golpe corpo a corpo · arrow: projétil · heal: cura aliados (monge). */
+export type AttackKind = 'melee' | 'arrow' | 'heal';
 
 export interface UnitDef {
   id: UnitId;
-  faction: Faction;
   hp: number;
   damage: number;
   armor: number;
@@ -39,10 +31,6 @@ export interface UnitDef {
   trainTime: number;
   pop: number;
   attack: AttackKind;
-  /** Raio de dano em área (px). */
-  splash?: number;
-  /** Multiplicador de dano contra construções. */
-  buildingBonus?: number;
   worker?: boolean;
   radius: number;
   /** Chave-base da spritesheet (sem a cor). */
@@ -54,13 +42,10 @@ export interface TowerAttack {
   damage: number;
   range: number;
   cooldown: number;
-  projectile: 'arrow' | 'dynamite';
-  splash?: number;
 }
 
 export interface BuildingDef {
   id: BuildingId;
-  faction: Faction;
   /** Tamanho do footprint em tiles. */
   w: number;
   h: number;

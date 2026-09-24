@@ -16,7 +16,7 @@ export const PACKS = {
     upload: /^Tiny Swords \(Free Pack\)(\.zip)?$/i,
     root: /^Tiny Swords \(Free Pack\)$/i,
     fallbackId: '15971141',
-    required: false,
+    required: true,
     online: true,
   },
   enemy: {

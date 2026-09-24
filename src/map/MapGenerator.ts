@@ -24,12 +24,22 @@ export interface GameMap {
   seed: number;
   /** 1 = terra, 0 = água */
   land: Uint8Array;
-  /** 1 = areia (apenas visual, caminhável) */
-  sand: Uint8Array;
+  /** 1 = mancha de grama em outro tom (apenas visual, caminhável) */
+  patch: Uint8Array;
+  /** 1 = topo de planalto rochoso (intransponível) */
+  plateau: Uint8Array;
+  /** 1 = face do penhasco logo abaixo de um planalto (intransponível) */
+  cliff: Uint8Array;
   /** Canto superior esquerdo do footprint 5x3 da base principal de cada time. */
   starts: [{ tx: number; ty: number }, { tx: number; ty: number }];
   resources: PlacedResource[];
   decor: Decor[];
+}
+
+/** Tile bloqueado pelo relevo (planalto ou penhasco)? */
+export function reliefBlocked(map: GameMap, x: number, y: number): boolean {
+  const i = y * map.w + x;
+  return map.plateau[i] === 1 || map.cliff[i] === 1;
 }
 
 export const MAIN_W = 5;
@@ -156,6 +166,29 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
   };
 
   const c0 = baseCenter(p0);
+
+  // --- planaltos rochosos (intransponíveis), sempre com o penhasco virado para o sul
+  const plateau = new Uint8Array(N);
+  const plateauCount = Math.round(2 * k);
+  for (let placed = 0, tries = 0; placed < plateauCount && tries < 80; tries++) {
+    const pw = rng.int(3, 6);
+    const ph = rng.int(2, 3);
+    const tx = rng.int(4, w - pw - 4);
+    const ty = rng.int(3, Math.floor(h / 2) - ph - 2);
+    const cx = tx + pw / 2;
+    const cy = ty + ph / 2;
+    if (Math.hypot(cx - c0.x, cy - c0.y) < 13 || Math.hypot(w - 1 - cx - c0.x, h - 1 - cy - c0.y) < 13) continue;
+    // o bloco inclui a linha do penhasco (ph + 1) e 1 tile de terra livre em volta
+    const m = mirrorRect(tx, ty, pw, ph + 1);
+    if (!canUse(tx, ty, pw, ph + 1, 1) || !canUse(m.tx, m.ty, pw, ph + 1, 1)) continue;
+    if (Math.abs(tx - m.tx) < pw + 3 && Math.abs(ty - m.ty) < ph + 4) continue;
+    for (const o of [{ tx, ty }, m]) {
+      for (let y = o.ty; y < o.ty + ph; y++) for (let x = o.tx; x < o.tx + pw; x++) plateau[idx(x, y)] = 1;
+      reserve(o.tx, o.ty, pw, ph + 1, 1);
+    }
+    placed++;
+  }
+
   // mina de ouro de cada base
   const mineSpots = [
     [8, -6],
@@ -222,7 +255,9 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
   }
 
   // --- conectividade: garante caminho entre as bases
-  const walk = (x: number, y: number) => inB(x, y) && land[idx(x, y)] === 1 && !isBlockingAt(x, y);
+  const cliffBelow = (x: number, y: number) => inB(x, y - 1) && plateau[idx(x, y - 1)] === 1 && plateau[idx(x, y)] === 0;
+  const walk = (x: number, y: number) =>
+    inB(x, y) && land[idx(x, y)] === 1 && !plateau[idx(x, y)] && !cliffBelow(x, y) && !isBlockingAt(x, y);
   function isBlockingAt(x: number, y: number) {
     for (const r of resources) {
       const d = RESOURCES[r.kind];
@@ -269,6 +304,8 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
           const y = cy + dy;
           if (!inB(x, y)) continue;
           land[idx(x, y)] = 1;
+          plateau[idx(x, y)] = 0;
+          if (inB(x, y - 1)) plateau[idx(x, y - 1)] = 0;
           for (let i = resources.length - 1; i >= 0; i--) {
             const r = resources[i];
             if (r.kind === 'tree' && r.tx === x && r.ty === y) resources.splice(i, 1);
@@ -277,7 +314,18 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
     }
   }
 
-  // --- areia decorativa
+  // planaltos cortados pelo corredor: remove pedaços finos demais (autotile precisa de 2x2)
+  for (let pass = 0; pass < 2; pass++)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        if (!plateau[idx(x, y)]) continue;
+        const P = (a: number, b: number) => inB(a, b) && plateau[idx(a, b)] === 1;
+        if (!(P(x - 1, y) || P(x + 1, y)) || !(P(x, y - 1) || P(x, y + 1))) plateau[idx(x, y)] = 0;
+      }
+  const cliff = new Uint8Array(N);
+  for (let y = 1; y < h; y++) for (let x = 0; x < w; x++) if (cliffBelow(x, y)) cliff[idx(x, y)] = 1;
+
+  // --- manchas de grama em outro tom (decorativas)
   const sand = new Uint8Array(N);
   for (let i = 0; i < Math.round(4 * k); i++) {
     const cx = rng.range(6, w - 6);
@@ -307,25 +355,36 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
       if (!(S(x - 1, y) || S(x + 1, y)) || !(S(x, y - 1) || S(x, y + 1))) sand[i] = 0;
     }
 
-  // --- decoração (não bloqueia)
+  // --- decoração (não bloqueia): arbustos e pedras no chão e no topo dos planaltos
   const decor: Decor[] = [];
-  const knightsDeco = ['deco_01', 'deco_02', 'deco_04', 'deco_05', 'deco_07', 'deco_08', 'deco_10', 'deco_11', 'deco_12', 'deco_13'];
-  const goblinDeco = ['deco_14', 'deco_15', 'deco_03', 'deco_06', 'deco_09'];
-  for (let i = 0; i < Math.round(90 * k); i++) {
+  const groundDeco = ['bush1', 'bush2', 'bush3', 'bush4', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3', 'rock4'];
+  for (let i = 0; i < Math.round(70 * k); i++) {
     const x = rng.int(1, w - 2);
     const y = rng.int(1, h - 2);
-    if (!land[idx(x, y)] || occ[idx(x, y)]) continue;
-    const nearGoblins = Math.hypot(x - (p1.tx + 2), y - (p1.ty + 1)) < 14;
-    decor.push({ key: rng.pick(nearGoblins ? goblinDeco : knightsDeco), tx: x, ty: y, ox: rng.int(-16, 16), oy: rng.int(-16, 16) });
+    if (!land[idx(x, y)] || cliff[idx(x, y)]) continue;
+    if (occ[idx(x, y)] && !plateau[idx(x, y)]) continue;
+    decor.push({ key: rng.pick(groundDeco), tx: x, ty: y, ox: rng.int(-14, 14), oy: rng.int(-14, 10) });
   }
-  // marcos das bases
-  const signs: [string, number, number][] = [
-    ['deco_17', p0.tx + MAIN_W + 2, p0.ty - 2],
-    ['deco_18', p0.tx - 1, p0.ty - 3],
-    ['deco_16', p1.tx - 3, p1.ty + MAIN_H + 1],
-    ['deco_16', p1.tx + MAIN_W + 1, p1.ty + MAIN_H + 2],
-  ];
-  for (const [key, x, y] of signs) if (inB(x, y) && land[idx(x, y)] && !occ[idx(x, y)]) decor.push({ key, tx: x, ty: y, ox: 0, oy: 0 });
+  // na água: pedras perto da costa e um patinho de borracha
+  const nearLand = (x: number, y: number, r: number) => {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (inB(x + dx, y + dy) && land[idx(x + dx, y + dy)]) return true;
+    return false;
+  };
+  let waterRocks = 0;
+  for (let i = 0; i < 600 && waterRocks < Math.round(10 * k); i++) {
+    const x = rng.int(0, w - 1);
+    const y = rng.int(0, h - 1);
+    if (land[idx(x, y)] || nearLand(x, y, 1) || !nearLand(x, y, 2)) continue;
+    decor.push({ key: `water_rock${rng.int(1, 4)}`, tx: x, ty: y, ox: rng.int(-12, 12), oy: rng.int(-12, 12) });
+    waterRocks++;
+  }
+  for (let i = 0; i < 200; i++) {
+    const x = rng.int(0, w - 1);
+    const y = rng.int(Math.floor(h / 2), h - 1);
+    if (land[idx(x, y)] || nearLand(x, y, 1) || !nearLand(x, y, 3)) continue;
+    decor.push({ key: 'duck', tx: x, ty: y, ox: 0, oy: 0 });
+    break;
+  }
 
-  return { w, h, seed, land, sand, starts: [p0, p1], resources, decor };
+  return { w, h, seed, land, patch: sand, plateau, cliff, starts: [p0, p1], resources, decor };
 }

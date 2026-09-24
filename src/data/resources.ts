@@ -14,7 +14,8 @@ export interface ResourceDef {
 }
 
 export const RESOURCES: Record<ResourceKind, ResourceDef> = {
-  goldMine: { kind: 'goldMine', res: 'gold', amount: 1500, w: 3, h: 2, blocking: true, rate: 2, maxWorkers: 3 },
+  // jazida de ouro (pedras douradas): os peões mineram em volta, com picareta
+  goldMine: { kind: 'goldMine', res: 'gold', amount: 1500, w: 2, h: 2, blocking: true, rate: 2, maxWorkers: 4 },
   tree: { kind: 'tree', res: 'wood', amount: 100, w: 1, h: 1, blocking: true, rate: 2, maxWorkers: 0 },
   sheep: { kind: 'sheep', res: 'meat', amount: 150, w: 1, h: 1, blocking: false, rate: 2.5, maxWorkers: 0 },
 };

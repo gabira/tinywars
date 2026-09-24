@@ -3,7 +3,7 @@ import type { ResType, Team } from '../data/types';
 /** Eventos pontuais emitidos pela simulação (efeitos visuais, avisos, estatísticas). */
 export type GameEvent =
   | { type: 'projectileFired'; id: number }
-  | { type: 'explosion'; x: number; y: number; radius: number; team: Team }
+  | { type: 'healed'; id: number; x: number; y: number; team: Team }
   | { type: 'unitDied'; id: number; x: number; y: number; team: Team; killerTeam: Team | null }
   | { type: 'buildingDestroyed'; id: number; x: number; y: number; team: Team }
   | { type: 'buildingCompleted'; id: number; team: Team }

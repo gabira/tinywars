@@ -5,13 +5,13 @@ import { UNITS } from '../data/units';
 import type { Building, Unit } from '../entities/Entity';
 import { nearestNode } from '../systems/economy';
 import type { Controller, World } from '../systems/World';
-import { chooseTroop, desiredSplit, needsHouse, pickResource, shouldAttack, shouldRetreat, type TroopId } from './decisions';
+import { chooseTroop, desiredSplit, needsHouse, pickResource, shouldAttack, shouldRetreat, TROOPS, type TroopId } from './decisions';
 import { findBuildSpot } from './placement';
 
 type MilState = 'buildUp' | 'attack' | 'defend';
 
-/** IA dos Goblins: age apenas por world.issue (os mesmos comandos do jogador). */
-export class GoblinAI implements Controller {
+/** IA do reino rival: age apenas por world.issue (os mesmos comandos do jogador). */
+export class RivalAI implements Controller {
   private timer = 2;
   state: MilState = 'buildUp';
   waveSize: number;
@@ -60,47 +60,50 @@ export class GoblinAI implements Controller {
       }
     }
 
-    // 2) treinar servos
+    // 2) treinar peões
     const producers = mine.filter((b) => b.complete && b.def.trains.length).length;
     if (workers.length + hall.queue.length < d.workerTarget && hall.queue.length < 2 && me.pop + hall.queue.length < me.popCap) {
-      w.issue(this.team, { type: 'train', buildingId: hall.id, unit: 'servant' });
+      w.issue(this.team, { type: 'train', buildingId: hall.id, unit: 'pawn' });
     }
 
     // 3) casas (população)
-    const huts = count('goblinHut', false);
-    if (needsHouse(me.pop, me.popCap, huts, producers) && me.res.wood >= BUILDINGS.goblinHut.cost.wood!) {
-      this.construct('goblinHut', workers, hall, null);
+    const housesBuilding = count('house', false);
+    if (needsHouse(me.pop, me.popCap, housesBuilding, producers) && me.res.wood >= BUILDINGS.house.cost.wood!) {
+      this.construct('house', workers, hall, null);
     }
 
-    // 4) acampamentos e torres
+    // 4) produção militar: quartel → arquearia → monastério; torres
     const enemyHall = w.mainBuilding(this.enemy);
     const toward = enemyHall ? { x: enemyHall.x / TILE, y: enemyHall.y / TILE } : null;
-    const camps = count('goblinCamp');
-    const campsDone = count('goblinCamp', true);
-    // com recursos sobrando, gasta: mais um acampamento e filas maiores
+    const barracks = count('barracks');
+    const barracksDone = count('barracks', true);
     const rich = me.res.wood > 400 && me.res.gold > 150 && me.res.meat > 300;
-    const campTarget = d.camps + (rich && w.time > 240 ? 1 : 0);
-    if (camps < campTarget && workers.length >= 5 + camps * 4) {
-      this.construct('goblinCamp', workers, hall, toward);
-    }
-    if (campsDone > 0 && count('woodTower') < d.towers && w.time > 200 + count('woodTower') * 150) {
-      this.construct('woodTower', workers, hall, toward);
-    }
+    const barracksTarget = d.barracks + (rich && w.time > 240 ? 1 : 0);
+    // próxima construção prioritária: a IA poupa recursos para ela em vez de gastar tudo em tropas
+    let next: BuildingId | null = null;
+    if (barracks < barracksTarget && workers.length >= 5 + barracks * 4) next = 'barracks';
+    else if (barracksDone > 0 && d.mix.archer > 0 && count('archery') < 1 && workers.length >= 8) next = 'archery';
+    else if (barracksDone > 0 && d.mix.monk > 0 && count('monastery') < 1 && w.time > 240) next = 'monastery';
+    else if (barracksDone > 0 && count('tower') < d.towers && w.time > 200 + count('tower') * 150) next = 'tower';
+    if (next) this.construct(next, workers, hall, next === 'monastery' ? null : toward);
+    const saving = next && count(next, false) === 0 ? BUILDINGS[next].cost : {};
 
     // 5) trabalhadores ociosos vão coletar
-    this.assignWorkers(workers, hall, campsDone > 0);
+    this.assignWorkers(workers, hall, barracksDone > 0);
 
-    // 6) tropas
-    const have: Record<TroopId, number> = { torch: 0, tnt: 0, barrel: 0 };
-    for (const u of army) if (u.def.id in have) have[u.def.id as TroopId]++;
+    // 6) tropas: cada prédio treina a tropa com maior déficit entre as que ele sabe treinar
+    const have: Record<TroopId, number> = { warrior: 0, lancer: 0, archer: 0, monk: 0 };
+    for (const u of army) if ((TROOPS as readonly string[]).includes(u.def.id)) have[u.def.id as TroopId]++;
     for (const b of mine) {
-      if (!b.complete || b.def.id !== 'goblinCamp' || b.queue.length >= (rich ? 3 : 2)) continue;
+      if (!b.complete || b.def.main || !b.def.trains.length || b.queue.length >= (rich ? 3 : 2)) continue;
       if (me.pop + b.queue.length >= me.popCap) break;
-      // guarda madeira para a próxima cabana
-      const reserveWood = me.popCap - me.pop <= 3 ? BUILDINGS.goblinHut.cost.wood! : 0;
-      const troop = chooseTroop(have, d.mix);
+      const troop = chooseTroop(have, d.mix, b.def.trains as TroopId[]);
+      if (!troop) continue;
+      // guarda madeira para a próxima casa e recursos para a construção prioritária
+      const reserveWood = Math.max(me.popCap - me.pop <= 3 ? BUILDINGS.house.cost.wood! : 0, saving.wood ?? 0);
       const cost = UNITS[troop].cost;
       if ((cost.wood ?? 0) + reserveWood > me.res.wood) continue;
+      if ((cost.gold ?? 0) + (saving.gold ?? 0) > me.res.gold) continue;
       if (w.issue(this.team, { type: 'train', buildingId: b.id, unit: troop }).ok) have[troop]++;
     }
 
@@ -132,22 +135,22 @@ export class GoblinAI implements Controller {
     const ay = hall.y / TILE;
     let anchor = { x: ax, y: ay };
     let minR = 4;
-    if (toward && id !== 'goblinHut') {
+    if (toward && id !== 'house') {
       const dx = toward.x - ax;
       const dy = toward.y - ay;
       const len = Math.hypot(dx, dy) || 1;
-      const dist = id === 'woodTower' ? 5 : 6;
+      const dist = id === 'tower' ? 5 : 6;
       anchor = { x: ax + (dx / len) * dist, y: ay + (dy / len) * dist };
       minR = 0;
     }
-    const spot = findBuildSpot(w, this.team, def, anchor.x, anchor.y, id === 'goblinHut' ? null : toward, minR, 16);
+    const spot = findBuildSpot(w, this.team, def, anchor.x, anchor.y, id === 'house' ? null : toward, minR, 16);
     if (!spot) return;
     const builder = this.closestWorker(workers, spot.tx * TILE, spot.ty * TILE);
     if (!builder) return;
     w.issue(this.team, { type: 'build', unitIds: [builder.id], building: id, tx: spot.tx, ty: spot.ty });
   }
 
-  private assignWorkers(workers: Unit[], hall: Building, hasCamp: boolean): void {
+  private assignWorkers(workers: Unit[], hall: Building, hasBarracks: boolean): void {
     const w = this.world;
     const counts: Record<ResType, number> = { gold: 0, wood: 0, meat: 0 };
     for (const u of workers) {
@@ -163,10 +166,11 @@ export class GoblinAI implements Controller {
         wood: !!nearestNode(w, hall.x, hall.y, 'wood', 30 * TILE),
         meat: !!nearestNode(w, hall.x, hall.y, 'meat', 16 * TILE),
       };
-      // no máximo 3 por mina
-      const mines = w.resources.filter((r) => r.alive && r.def.kind === 'goldMine' && Math.hypot(r.x - hall.x, r.y - hall.y) < 22 * TILE).length;
-      if (counts.gold >= mines * 3) available.gold = false;
-      const res = pickResource(counts, desiredSplit(hasCamp), available);
+      // no máximo o limite de peões por jazida
+      const deposits = w.resources.filter((r) => r.alive && r.def.kind === 'goldMine' && Math.hypot(r.x - hall.x, r.y - hall.y) < 22 * TILE);
+      const slots = deposits.reduce((n, r) => n + r.def.maxWorkers, 0);
+      if (counts.gold >= slots) available.gold = false;
+      const res = pickResource(counts, desiredSplit(hasBarracks), available);
       if (!res) continue;
       const node = nearestNode(w, u.x, u.y, res, 30 * TILE);
       if (!node) continue;
@@ -202,6 +206,7 @@ export class GoblinAI implements Controller {
     }
     if (this.state === 'defend') this.state = this.prevState === 'attack' ? 'attack' : 'buildUp';
 
+    const barracks = mine.find((b) => b.def.id === 'barracks' && b.complete) ?? hall;
     if (this.state === 'buildUp') {
       if (shouldAttack(army.length, this.waveSize, w.time, d.firstAttack)) {
         this.state = 'attack';
@@ -209,11 +214,10 @@ export class GoblinAI implements Controller {
         this.targetId = 0;
         w.events.emit({ type: 'attackWave', team: this.team });
       } else {
-        // agrupa perto do acampamento, voltado para o inimigo
-        const camp = mine.find((b) => b.def.id === 'goblinCamp' && b.complete) ?? hall;
-        const idle = army.filter((u) => !u.order && Math.hypot(u.x - camp.x, u.y - camp.y) > 5 * TILE);
+        // agrupa perto do quartel, voltado para o inimigo
+        const idle = army.filter((u) => !u.order && Math.hypot(u.x - barracks.x, u.y - barracks.y) > 5 * TILE);
         if (idle.length) {
-          const rally = this.rallyPoint(camp);
+          const rally = this.rallyPoint(barracks);
           w.issue(this.team, { type: 'move', unitIds: idle.map((u) => u.id), x: rally.x, y: rally.y });
         }
         return;
@@ -224,18 +228,15 @@ export class GoblinAI implements Controller {
       if (shouldRetreat(army.length, this.waveSize)) {
         this.state = 'buildUp';
         this.waveSize += d.waveGrowth;
-        const camp = mine.find((b) => b.def.id === 'goblinCamp') ?? hall;
-        const rally = this.rallyPoint(camp);
+        const rally = this.rallyPoint(barracks);
         w.issue(this.team, { type: 'move', unitIds: army.map((u) => u.id), x: rally.x, y: rally.y });
         return;
       }
       const target = this.pickTarget(army);
       if (!target) return;
       const idle = army.filter((u) => !u.order);
-      const barrels = idle.filter((u) => u.def.id === 'barrel');
-      const rest = idle.filter((u) => u.def.id !== 'barrel');
-      if (barrels.length) w.issue(this.team, { type: 'attack', unitIds: barrels.map((u) => u.id), targetId: target.id });
-      if (rest.length) w.issue(this.team, { type: 'move', unitIds: rest.map((u) => u.id), x: target.x, y: target.y + target.def.h * TILE * 0.5 + 20, attack: true });
+      if (idle.length)
+        w.issue(this.team, { type: 'move', unitIds: idle.map((u) => u.id), x: target.x, y: target.y + target.def.h * TILE * 0.5 + 20, attack: true });
     }
   }
 

@@ -7,7 +7,7 @@ export const MAP_W = 96;
 export const MAP_H = 72;
 
 /** Alturas das faixas do HUD (em pixels de tela). */
-export const HUD_TOP = 40;
+export const HUD_TOP = 52;
 export const HUD_BOTTOM = 176;
 
 export const FONT = '"Pixelify Sans", "Trebuchet MS", sans-serif';

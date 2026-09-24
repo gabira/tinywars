@@ -43,7 +43,7 @@ export class Minimap {
     for (let y = 0; y < m.h; y++)
       for (let x = 0; x < m.w; x++) {
         const i = y * m.w + x;
-        ctx.fillStyle = m.land[i] ? (m.sand[i] ? '#d9c27a' : '#6aa84f') : '#3f8f95';
+        ctx.fillStyle = !m.land[i] ? '#3f8f95' : m.plateau[i] ? '#7f9a5a' : m.cliff[i] ? '#4f6f73' : m.patch[i] ? '#5c9f4a' : '#8fb04a';
         ctx.fillRect(x * PX, y * PX, PX, PX);
       }
     this.frame = scene.add.rectangle(0, 0, this.width + 6, this.height + 6, 0x2b1d12).setOrigin(0);

@@ -1,12 +1,12 @@
-import type { BuildingId, Faction, Team, UnitId } from './types';
+import type { BuildingId, Team, UnitId } from './types';
 
-export interface FactionSetup {
-  faction: Faction;
+export interface TeamSetup {
   main: BuildingId;
   worker: UnitId;
 }
 
-export const TEAMS: Record<Team, FactionSetup> = {
-  0: { faction: 'knights', main: 'castle', worker: 'pawn' },
-  1: { faction: 'goblins', main: 'goblinHall', worker: 'servant' },
+/** Os dois reinos começam iguais: castelo e peões. */
+export const TEAMS: Record<Team, TeamSetup> = {
+  0: { main: 'castle', worker: 'pawn' },
+  1: { main: 'castle', worker: 'pawn' },
 };

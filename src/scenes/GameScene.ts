@@ -10,8 +10,9 @@ import { WorldInput } from '../input/WorldInput';
 import { Fog } from '../render/Fog';
 import { Fx } from '../render/Fx';
 import { Overlay } from '../render/Overlay';
-import { drawTerrain } from '../render/Terrain';
+import { drawTerrain, type TerrainHandle } from '../render/Terrain';
 import { ViewManager } from '../render/ViewManager';
+import { cssCursor } from '../ui/cursors';
 import { aiColorFor, setTeamColors, type TeamColor } from '../render/palette';
 import { loadColor } from '../game/prefs';
 
@@ -25,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private overlay!: Overlay;
   private worldInput!: WorldInput;
   private acc = 0;
+  private terrain!: TerrainHandle;
   private perfText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
@@ -47,7 +49,7 @@ export class GameScene extends Phaser.Scene {
     registerAnimations(this);
     const s = this.session;
     const w = s.world;
-    drawTerrain(this, w.map);
+    this.terrain = drawTerrain(this, w.map);
     this.views = new ViewManager(this, w);
     this.fx = new Fx(this, w);
     this.fog = new Fog(this, w);
@@ -78,11 +80,11 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         case 'attackWave':
-          s.toast(S.msg.goblinsAttack, '#ff9b8a');
+          s.toast(S.msg.rivalAttack, '#ff9b8a');
           break;
         case 'gameOver':
           s.ui.emit('gameOver', e.winner);
-          this.game.canvas.style.cursor = 'default';
+          this.game.canvas.style.cursor = cssCursor('default');
           break;
       }
     });
@@ -107,11 +109,12 @@ export class GameScene extends Phaser.Scene {
       this.views.destroyAll();
       this.fog.destroy();
       this.overlay.destroy();
-      this.game.canvas.style.cursor = 'default';
+      this.game.canvas.style.cursor = cssCursor('default');
     });
   }
 
   update(_time: number, delta: number): void {
+    this.terrain.update(delta / 1000);
     const s = this.session;
     const w = s.world;
     const p = this.input.activePointer;
