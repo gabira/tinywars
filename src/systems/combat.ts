@@ -8,14 +8,43 @@ import type { World } from './World';
 
 const ARROW_SPEED = 600;
 
+/** Bônus de quem está no alto do planalto (em px e tiles). */
+export const HIGH_GROUND = { range: 64, sightArcher: 2, sightOther: 1 };
+
+/** Nível (0 chão, 1 planalto) em que a entidade está. */
+export function levelOf(world: World, e: { x: number; y: number } | AnyEntity): number {
+  if ('kind' in e && e.kind === 'building') return world.nav.level(e.tx, e.ty);
+  if ('kind' in e && e.kind === 'resource' && e.def.kind !== 'sheep') return world.nav.level(e.tx, e.ty);
+  return world.nav.levelAt(e.x, e.y);
+}
+
+function onRamp(world: World, e: { x: number; y: number }): boolean {
+  return world.nav.isRamp(Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+}
+
+/** Quem está embaixo só enxerga a beirada do planalto; do alto (ou da rampa) vê tudo. */
+export function canSeeTarget(world: World, viewer: { x: number; y: number }, t: AnyEntity): boolean {
+  if (levelOf(world, viewer) >= levelOf(world, t) || onRamp(world, viewer)) return true;
+  const p = aimPoint(viewer, t);
+  return Math.hypot(p.x - viewer.x, p.y - viewer.y) <= TILE * 1.5;
+}
+
+/** Alcance efetivo: arqueiros no alto atiram mais longe em quem está embaixo. */
+export function attackRange(world: World, u: Unit, t: AnyEntity): number {
+  const bonus = u.def.attack === 'arrow' && levelOf(world, u) > levelOf(world, t) ? HIGH_GROUND.range : 0;
+  return u.def.range + bonus;
+}
+
 /** Distância da borda de `u` até a borda do alvo. */
 export function edgeDistance(u: { x: number; y: number; radius: number }, t: AnyEntity): number {
   if (t.kind === 'building') return distToRect(u.x, u.y, t.rect) - u.radius;
   return Math.hypot(t.x - u.x, t.y - u.y) - u.radius - t.radius;
 }
 
-export function inAttackRange(u: Unit, t: AnyEntity, slack = 0): boolean {
-  return edgeDistance(u, t) <= u.def.range + slack;
+export function inAttackRange(world: World, u: Unit, t: AnyEntity, slack = 0): boolean {
+  // corpo a corpo não alcança através da borda do planalto (só no mesmo nível ou na rampa)
+  if (u.def.attack === 'melee' && levelOf(world, u) !== levelOf(world, t) && !onRamp(world, u) && !(t.kind === 'unit' && onRamp(world, t))) return false;
+  return edgeDistance(u, t) <= attackRange(world, u, t) + slack;
 }
 
 /** Ponto do alvo mais próximo de u (para mirar/aproximar). */
@@ -68,7 +97,7 @@ export function resolveAttack(world: World, u: Unit): void {
   }
   if (!canAttack(u, t)) return;
   if (def.attack === 'melee') {
-    if (inAttackRange(u, t, 16)) dealDamage(world, u.team, t, def.damage, u.id);
+    if (inAttackRange(world, u, t, 16)) dealDamage(world, u.team, t, def.damage, u.id);
     return;
   }
   const p = aimPoint(u, t);
@@ -141,7 +170,7 @@ export function findTarget(world: World, u: { x: number; y: number; team: Team }
   for (const o of scan) {
     if (!o.alive || o.team === u.team || o.hidden) continue;
     const d = Math.hypot(o.x - u.x, o.y - u.y) - o.radius;
-    if (d > radius) continue;
+    if (d > radius || !canSeeTarget(world, u, o)) continue;
     let score = d;
     if (o.isWorker) score += 60;
     if (o.order?.type === 'attack' || o.windupTimer >= 0) score -= 80;
@@ -156,7 +185,7 @@ export function findTarget(world: World, u: { x: number; y: number; team: Team }
   for (const b of world.buildings) {
     if (!b.alive || b.team === u.team) continue;
     const d = distToRect(u.x, u.y, b.rect);
-    if (d > radius) continue;
+    if (d > radius || !canSeeTarget(world, u, b)) continue;
     const score = d + 200;
     if (score < bestScore) {
       bestScore = score;
@@ -191,8 +220,11 @@ export function updateTowers(world: World, dt: number): void {
     if (!atk || !b.complete || !b.alive) continue;
     b.cooldown -= dt;
     if (b.cooldown > 0) continue;
-    const t = findTarget(world, { x: b.x, y: b.y, team: b.team }, atk.range);
+    // torre no alto do planalto atira mais longe em quem está embaixo
+    const high = levelOf(world, b) === 1;
+    const t = findTarget(world, { x: b.x, y: b.y, team: b.team }, atk.range + (high ? HIGH_GROUND.range : 0));
     if (!t) continue;
+    if (!(high && levelOf(world, t) === 0) && Math.hypot(t.x - b.x, t.y - b.y) - t.radius > atk.range) continue;
     b.cooldown = atk.cooldown;
     b.attackSeq++;
     const src = { x: b.x, y: b.y - TILE * 1.6 };

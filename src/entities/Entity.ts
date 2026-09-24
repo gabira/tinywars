@@ -133,6 +133,8 @@ export class Building extends Entity {
 export class ResourceNode extends Entity {
   readonly kind = 'resource' as const;
   amount: number;
+  /** Quantidade inicial deste nó (jazidas variam de tamanho). */
+  readonly maxAmount: number;
   workers = new Set<number>();
   hitSeq = 0;
   // ovelha
@@ -148,9 +150,11 @@ export class ResourceNode extends Entity {
     readonly tx: number,
     readonly ty: number,
     readonly def: ResourceDef,
+    amount?: number,
   ) {
     super(id, -1, (tx + def.w / 2) * TILE, (ty + def.h / 2) * TILE, 1, def.kind === 'sheep' ? 18 : (Math.max(def.w, def.h) * TILE) / 2);
-    this.amount = def.amount;
+    this.amount = amount ?? def.amount;
+    this.maxAmount = this.amount;
     this.homeX = this.x;
     this.homeY = this.y;
     this.targetX = this.x;

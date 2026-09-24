@@ -183,7 +183,11 @@ export class SelectionPanel {
     void desc;
     const wk = this.text(tx, this.y + 100, '', 14);
     this.dyn.push(() => {
-      rem.setText(fmt(S.panel.remaining, { amount: r.amount, res: S.res[r.def.res] }));
+      rem.setText(
+        r.def.kind === 'goldMine'
+          ? fmt(S.panel.remainingOf, { amount: r.amount, max: r.maxAmount, res: S.res[r.def.res] })
+          : fmt(S.panel.remaining, { amount: r.amount, res: S.res[r.def.res] }),
+      );
       if (r.def.maxWorkers) wk.setText(fmt(S.panel.workers, { n: r.workers.size, max: r.def.maxWorkers }));
     });
   }

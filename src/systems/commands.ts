@@ -60,12 +60,16 @@ export function formationSlots(world: World, x: number, y: number, count: number
   if (count <= 1) return [{ x, y }];
   const spacing = 34;
   const slots: { x: number; y: number; d: number }[] = [];
+  const level = world.nav.levelAt(x, y);
   const rings = Math.ceil(Math.sqrt(count)) + 2;
   for (let gy = -rings; gy <= rings; gy++)
     for (let gx = -rings; gx <= rings; gx++) {
       const px = x + gx * spacing;
       const py = y + gy * spacing;
-      if (!world.nav.walkable(Math.floor(px / TILE), Math.floor(py / TILE))) continue;
+      const tx = Math.floor(px / TILE);
+      const ty = Math.floor(py / TILE);
+      // as vagas ficam no mesmo nível do ponto clicado (não se espalham para fora do planalto)
+      if (!world.nav.walkable(tx, ty) || (world.nav.level(tx, ty) !== level && !world.nav.isRamp(tx, ty))) continue;
       slots.push({ x: px, y: py, d: Math.hypot(gx, gy * 1.1) });
     }
   slots.sort((a, b) => a.d - b.d);

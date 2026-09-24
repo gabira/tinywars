@@ -11,7 +11,7 @@ import type { BuildingId, Team, UnitId } from '../data/types';
 import { UNITS } from '../data/units';
 import { AnyEntity, Building, Projectile, ResourceNode, Unit } from '../entities/Entity';
 import { Player } from '../entities/Player';
-import { generateMap, reliefBlocked, type GameMap } from '../map/MapGenerator';
+import { elevationAt, generateMap, reliefBlocked, type GameMap } from '../map/MapGenerator';
 import { NavGrid } from '../map/NavGrid';
 import { AStar } from './pathfinding/AStar';
 import { PathService } from './pathfinding/PathService';
@@ -66,9 +66,14 @@ export class World {
     this.difficulty = DIFFICULTIES[opts.difficulty];
     this.map = generateMap(opts.seed);
     this.nav = new NavGrid(this.map.w, this.map.h, this.map.land);
-    // planaltos e penhascos são intransponíveis
+    // relevo: topo dos planaltos é nível 1; troca de nível só pelas rampas; penhascos bloqueiam
     for (let y = 0; y < this.map.h; y++)
-      for (let x = 0; x < this.map.w; x++) if (reliefBlocked(this.map, x, y)) this.nav.blockRect(x, y, 1, 1);
+      for (let x = 0; x < this.map.w; x++) {
+        const i = y * this.map.w + x;
+        this.nav.elev[i] = elevationAt(this.map, x, y);
+        this.nav.ramp[i] = this.map.ramp[i] ? 1 : 0;
+        if (reliefBlocked(this.map, x, y)) this.nav.blockRect(x, y, 1, 1);
+      }
     this.astar = new AStar(this.nav);
     this.paths = new PathService(this);
     this.vision = new Vision(this, opts.fog ?? true);
@@ -88,7 +93,7 @@ export class World {
   }
 
   private setup(): void {
-    for (const r of this.map.resources) this.addResource(r.kind, r.tx, r.ty);
+    for (const r of this.map.resources) this.addResource(r.kind, r.tx, r.ty, r.amount);
     for (const team of [0, 1] as Team[]) {
       const s = this.map.starts[team];
       const main = this.addBuilding(team, TEAMS[team].main, s.tx, s.ty, true);
@@ -124,9 +129,9 @@ export class World {
     return e && e.kind === 'resource' ? e : undefined;
   }
 
-  addResource(kind: keyof typeof RESOURCES, tx: number, ty: number): ResourceNode {
+  addResource(kind: keyof typeof RESOURCES, tx: number, ty: number, amount?: number): ResourceNode {
     const def = RESOURCES[kind];
-    const r = new ResourceNode(this.newId(), tx, ty, def);
+    const r = new ResourceNode(this.newId(), tx, ty, def, amount);
     this.entities.set(r.id, r);
     this.resources.push(r);
     if (def.blocking) this.nav.blockRect(tx, ty, def.w, def.h);
@@ -164,7 +169,7 @@ export class World {
       const ux = Math.floor(u.x / TILE);
       const uy = Math.floor(u.y / TILE);
       if (ux >= tx && ux < tx + w && uy >= ty && uy < ty + h) {
-        const spot = this.nearestWalkable(u.x, u.y);
+        const spot = this.nearestWalkable(u.x, u.y, 12, this.nav.levelAt(u.x, u.y));
         if (spot) {
           u.x = spot.x;
           u.y = spot.y;
@@ -176,18 +181,19 @@ export class World {
     }
   }
 
-  /** Centro do tile caminhável mais próximo (busca em anéis). */
-  nearestWalkable(x: number, y: number, maxR = 12): { x: number; y: number } | null {
+  /** Centro do tile caminhável mais próximo (busca em anéis), de preferência no nível pedido. */
+  nearestWalkable(x: number, y: number, maxR = 12, level?: number): { x: number; y: number } | null {
     const cx = Math.floor(x / TILE);
     const cy = Math.floor(y / TILE);
-    if (this.nav.walkable(cx, cy)) return { x, y };
+    const okLevel = (tx: number, ty: number) => level === undefined || this.nav.level(tx, ty) === level || this.nav.isRamp(tx, ty);
+    if (this.nav.walkable(cx, cy) && okLevel(cx, cy)) return { x, y };
     for (let r = 1; r <= maxR; r++) {
       let best: { x: number; y: number } | null = null;
       let bestD = Infinity;
       for (let dy = -r; dy <= r; dy++)
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if (!this.nav.walkable(cx + dx, cy + dy)) continue;
+          if (!this.nav.walkable(cx + dx, cy + dy) || !okLevel(cx + dx, cy + dy)) continue;
           const px = (cx + dx) * TILE + TILE / 2;
           const py = (cy + dy) * TILE + TILE / 2;
           const d = Math.hypot(px - x, py - y);

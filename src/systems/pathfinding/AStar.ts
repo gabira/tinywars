@@ -7,6 +7,8 @@ export interface PathGoal {
   rw: number;
   rh: number;
   range: number;
+  /** Se definido, o tile final precisa estar neste nível (0 chão, 1 planalto). */
+  level?: number;
 }
 
 const SQRT2 = Math.SQRT2;
@@ -108,7 +110,8 @@ export class AStar {
     const grid = this.grid;
     const w = grid.w;
     const start = sy * w + sx;
-    const isGoal = (x: number, y: number) => goalDistance(x, y, goal) <= goal.range;
+    const isGoal = (x: number, y: number) =>
+      goalDistance(x, y, goal) <= goal.range && (goal.level === undefined || grid.level(x, y) === goal.level);
     if (isGoal(sx, sy) && grid.walkable(sx, sy)) return [];
 
     this.curGen++;
@@ -151,8 +154,8 @@ export class AStar {
       for (const [dx, dy, cost] of DIRS) {
         const nx = cx + dx;
         const ny = cy + dy;
-        if (!grid.walkable(nx, ny)) continue;
-        if (dx !== 0 && dy !== 0 && (!grid.walkable(cx + dx, cy) || !grid.walkable(cx, cy + dy))) continue;
+        // mesmo nível, ou subindo/descendo pela rampa; diagonais não cortam cantos
+        if (!grid.canStep(cx, cy, nx, ny)) continue;
         const ni = ny * w + nx;
         if (this.closed[ni] === G) continue;
         const ng = this.g[cur] + cost;

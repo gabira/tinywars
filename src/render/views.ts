@@ -228,7 +228,9 @@ export class ResourceView {
       return;
     }
     if (k === 'goldMine') {
-      const size = Phaser.Math.Clamp(Math.ceil((r.amount / r.def.amount) * 6), 1, 6);
+      // jazidas maiores começam com pedras maiores e encolhem conforme se esgotam
+      const start = r.maxAmount >= 3000 ? 6 : r.maxAmount >= 2000 ? 5 : 4;
+      const size = Phaser.Math.Clamp(Math.ceil((r.amount / r.maxAmount) * start), 1, start);
       const shine = r.workers.size > 0;
       if (size !== this.goldSize || shine !== this.goldShine) {
         this.goldSize = size;

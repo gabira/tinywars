@@ -84,6 +84,8 @@ export type PlacementError = 'invalidPlacement' | null;
 export function canPlace(world: World, team: Team, def: BuildingDef, tx: number, ty: number): boolean {
   if (tx < 1 || ty < 1 || tx + def.w > world.map.w - 1 || ty + def.h > world.map.h - 1) return false;
   if (!world.nav.rectFree(tx, ty, def.w, def.h)) return false;
+  // inteira num só nível (chão ou topo do planalto) e sem tapar rampas
+  if (!world.nav.rectOneLevel(tx, ty, def.w, def.h)) return false;
   if (team === 0 && world.vision.enabled) {
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) if (!world.vision.isExplored(x, y)) return false;
@@ -106,11 +108,13 @@ export function spawnPoint(world: World, b: Building, toward: { x: number; y: nu
   const { w, h } = b.def;
   const candidates: { x: number; y: number; d: number }[] = [];
   const tgt = toward ?? { x: b.x, y: (ty + h + 2) * TILE };
+  // a unidade nasce no mesmo nível da construção (não "cai" do planalto)
+  const lv = world.nav.level(tx, ty);
   for (let ring = 0; ring < 4; ring++) {
     for (let y = ty - 1 - ring; y <= ty + h + ring; y++)
       for (let x = tx - 1 - ring; x <= tx + w + ring; x++) {
         const onRing = x === tx - 1 - ring || x === tx + w + ring || y === ty - 1 - ring || y === ty + h + ring;
-        if (!onRing || !world.nav.walkable(x, y)) continue;
+        if (!onRing || !world.nav.walkable(x, y) || world.nav.level(x, y) !== lv) continue;
         const px = x * TILE + TILE / 2;
         const py = y * TILE + TILE / 2;
         candidates.push({ x: px, y: py, d: Math.hypot(px - tgt.x, py - tgt.y) });
@@ -176,7 +180,9 @@ export function updateSheep(world: World, dt: number): void {
       r.wanderTimer = world.rng.range(3, 7);
       const tx = r.homeX + world.rng.range(-70, 70);
       const ty = r.homeY + world.rng.range(-50, 50);
-      if (world.nav.walkable(Math.floor(tx / TILE), Math.floor(ty / TILE))) {
+      // só passeia no mesmo nível em que nasceu (planalto ou chão)
+      const homeLevel = world.nav.levelAt(r.homeX, r.homeY);
+      if (world.nav.walkable(Math.floor(tx / TILE), Math.floor(ty / TILE)) && world.nav.levelAt(tx, ty) === homeLevel && !world.nav.isRamp(Math.floor(tx / TILE), Math.floor(ty / TILE))) {
         r.targetX = tx;
         r.targetY = ty;
       }
@@ -186,8 +192,15 @@ export function updateSheep(world: World, dt: number): void {
     const d = Math.hypot(dx, dy);
     if (d > 1) {
       const s = Math.min(d, 22 * dt);
-      r.x += (dx / d) * s;
-      r.y += (dy / d) * s;
+      const nx = r.x + (dx / d) * s;
+      const ny = r.y + (dy / d) * s;
+      if (world.nav.levelAt(nx, ny) === world.nav.levelAt(r.homeX, r.homeY) && world.nav.walkable(Math.floor(nx / TILE), Math.floor(ny / TILE))) {
+        r.x = nx;
+        r.y = ny;
+      } else {
+        r.targetX = r.x;
+        r.targetY = r.y;
+      }
     }
   }
 }

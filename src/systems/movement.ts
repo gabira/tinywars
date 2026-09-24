@@ -83,12 +83,12 @@ export function updateMovement(world: World, dt: number): void {
     } else {
       const nx = u.x + (dx / d) * step;
       const ny = u.y + (dy / d) * step;
-      if (nav.walkable(Math.floor(nx / TILE), Math.floor(ny / TILE))) {
+      if (canMove(nav, u.x, u.y, nx, ny)) {
         u.x = nx;
         u.y = ny;
-      } else if (nav.walkable(Math.floor(nx / TILE), Math.floor(u.y / TILE))) {
+      } else if (canMove(nav, u.x, u.y, nx, u.y)) {
         u.x = nx;
-      } else if (nav.walkable(Math.floor(u.x / TILE), Math.floor(ny / TILE))) {
+      } else if (canMove(nav, u.x, u.y, u.x, ny)) {
         u.y = ny;
       }
       if (Math.abs(dx) > 0.5) u.facingX = Math.sign(dx);
@@ -154,9 +154,21 @@ export function updateSeparation(world: World, dt: number): void {
     }
     const nx = u.x + px;
     const ny = u.y + py;
-    if (nav.walkable(Math.floor(nx / TILE), Math.floor(ny / TILE))) {
+    if (canMove(nav, u.x, u.y, nx, ny)) {
       u.x = nx;
       u.y = ny;
     }
   }
+}
+
+/** Pode ir de um ponto a outro (mesmo tile, ou tile vizinho respeitando nível e rampas)? */
+function canMove(nav: World['nav'], x0: number, y0: number, x1: number, y1: number): boolean {
+  const ax = Math.floor(x0 / TILE);
+  const ay = Math.floor(y0 / TILE);
+  const bx = Math.floor(x1 / TILE);
+  const by = Math.floor(y1 / TILE);
+  if (ax === bx && ay === by) return nav.walkable(bx, by) || !nav.walkable(ax, ay);
+  if (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1) return false;
+  if (ax !== bx && ay !== by) return (nav.canStep(ax, ay, bx, ay) && nav.canStep(bx, ay, bx, by)) || (nav.canStep(ax, ay, ax, by) && nav.canStep(ax, by, bx, by));
+  return nav.canStep(ax, ay, bx, by);
 }

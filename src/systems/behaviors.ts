@@ -14,6 +14,7 @@ import {
   findWounded,
   inAttackRange,
   isHealer,
+  levelOf,
   resolveAttack,
   startAttack,
 } from './combat';
@@ -189,12 +190,12 @@ function doHold(world: World, u: Unit, dt: number): void {
   if (isHealer(u)) {
     // monge parado cura quem estiver ao alcance
     let t = u.targetId ? world.get(u.targetId) : undefined;
-    if (!canHeal(u, t) || !inAttackRange(u, t)) {
+    if (!canHeal(u, t) || !inAttackRange(world, u, t)) {
       t = undefined;
       u.targetId = 0;
       if (scanReady(u, dt)) {
         const c = findWounded(world, u, u.def.range + 24);
-        if (c && inAttackRange(u, c)) {
+        if (c && inAttackRange(world, u, c)) {
           u.targetId = c.id;
           t = c;
         }
@@ -204,12 +205,12 @@ function doHold(world: World, u: Unit, dt: number): void {
     return;
   }
   let t = u.targetId ? world.get(u.targetId) : undefined;
-  if (!canAttack(u, t) || !inAttackRange(u, t)) {
+  if (!canAttack(u, t) || !inAttackRange(world, u, t)) {
     t = undefined;
     u.targetId = 0;
     if (scanReady(u, dt)) {
       const c = findTarget(world, u, u.def.range + 48);
-      if (c && inAttackRange(u, c)) {
+      if (c && inAttackRange(world, u, c)) {
         u.targetId = c.id;
         t = c;
       }
@@ -245,7 +246,7 @@ function doAttack(world: World, u: Unit, o: Extract<Order, { type: 'attack' }>):
     return;
   }
   u.targetId = t.id;
-  if (inAttackRange(u, t)) {
+  if (inAttackRange(world, u, t)) {
     if (hasPath(u)) stopMoving(u);
     const p = aimPoint(u, t);
     faceTowards(u, p.x, p.y);
@@ -275,7 +276,7 @@ function doHeal(world: World, u: Unit, o: Extract<Order, { type: 'heal' }>): voi
     return;
   }
   u.targetId = t.id;
-  if (inAttackRange(u, t)) {
+  if (inAttackRange(world, u, t)) {
     if (hasPath(u)) stopMoving(u);
     faceTowards(u, t.x, t.y);
     if (u.cooldown <= 0 && u.windupTimer < 0) startAttack(u, t);
@@ -302,16 +303,17 @@ function chase(world: World, u: Unit, t: Unit | Building): void {
   if (u.goalKey === 'direct') u.goalKey = '';
   if (world.time - u.lastPathReq < 0.5 && hasPath(u)) return;
   if (!hasPath(u)) u.goalKey = '';
+  const level = u.def.attack === 'melee' ? levelOf(world, t) : undefined;
   if (t.kind === 'building') {
     const rangeTiles = Math.max(1, Math.floor((u.def.range + u.radius) / TILE));
-    moveToGoal(world, u, { ...t.goal, range: rangeTiles });
+    moveToGoal(world, u, { ...t.goal, range: rangeTiles, level });
     return;
   }
   const rangeTiles = Math.max(0, Math.floor(u.def.range / TILE));
   moveToGoal(
     world,
     u,
-    { rx: Math.floor(t.x / TILE), ry: Math.floor(t.y / TILE), rw: 1, rh: 1, range: rangeTiles },
+    { rx: Math.floor(t.x / TILE), ry: Math.floor(t.y / TILE), rw: 1, rh: 1, range: rangeTiles, level },
     rangeTiles === 0 ? { x: t.x, y: t.y } : null,
   );
 }
@@ -325,18 +327,20 @@ function goNear(world: World, u: Unit, t: ResourceNode | Building): void {
     if (world.time - u.lastPathReq < 0.5) return;
     u.goalKey = '';
   }
-  moveToGoal(world, u, t.goal);
+  // o peão precisa chegar pelo mesmo nível do alvo (sobe pela rampa se preciso)
+  moveToGoal(world, u, { ...t.goal, level: levelOf(world, t) });
 }
 
 // ---------------------------------------------------------------- economia
 
-function reachNode(u: Unit, r: ResourceNode): boolean {
+function reachNode(world: World, u: Unit, r: ResourceNode): boolean {
+  if (levelOf(world, u) !== levelOf(world, r)) return false;
   if (r.def.kind === 'sheep') return Math.hypot(r.x - u.x, r.y - u.y) <= u.radius + r.radius + 8;
   return distToRect(u.x, u.y, r.rect) - u.radius <= REACH;
 }
 
-function reachBuilding(u: Unit, b: Building): boolean {
-  return distToRect(u.x, u.y, b.rect) - u.radius <= REACH;
+function reachBuilding(world: World, u: Unit, b: Building): boolean {
+  return levelOf(world, u) === levelOf(world, b) && distToRect(u.x, u.y, b.rect) - u.radius <= REACH;
 }
 
 function doGather(world: World, u: Unit, o: Extract<Order, { type: 'gather' }>, dt: number): void {
@@ -377,7 +381,7 @@ function doGather(world: World, u: Unit, o: Extract<Order, { type: 'gather' }>, 
       return;
     }
     u.tool = TOOL_FOR[node.def.res];
-    if (!reachNode(u, node)) {
+    if (!reachNode(world, u, node)) {
       // recurso cercado (ex.: árvore no meio da floresta): depois de um tempo parado, troca de alvo
       if (!hasPath(u)) {
         u.timer += dt;
@@ -456,7 +460,7 @@ function doReturnPhase(world: World, u: Unit, o: Extract<Order, { type: 'gather'
     stopMoving(u);
     return;
   }
-  if (reachBuilding(u, drop)) {
+  if (reachBuilding(world, u, drop)) {
     stopMoving(u);
     const res = u.carry.res;
     deposit(world, u, drop);
@@ -484,7 +488,7 @@ function doReturn(world: World, u: Unit): void {
     completeOrder(u);
     return;
   }
-  if (reachBuilding(u, drop)) {
+  if (reachBuilding(world, u, drop)) {
     stopMoving(u);
     deposit(world, u, drop);
     const node = world.getResource(u.lastNodeId);
@@ -505,7 +509,7 @@ function doBuild(world: World, u: Unit, o: Extract<Order, { type: 'build' }>, dt
     return;
   }
   u.tool = 'hammer';
-  if (!reachBuilding(u, b)) {
+  if (!reachBuilding(world, u, b)) {
     clearWorkAnim(u);
     goNear(world, u, b);
     return;

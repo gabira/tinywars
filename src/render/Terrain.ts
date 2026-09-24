@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TILE } from '../config';
-import type { GameMap } from '../map/MapGenerator';
-import { autotileIndex, cliffIndex, GRASS_BASE, PLATEAU_BASE } from '../map/autotile';
+import { RAMP, type GameMap } from '../map/MapGenerator';
+import { autotileIndex, cliffIndex, GRASS_BASE, PLATEAU_BASE, TILESET_COLS } from '../map/autotile';
 import { originY } from './visuals';
 
 export interface TerrainHandle {
@@ -23,6 +23,18 @@ export function drawTerrain(scene: Phaser.Scene, map: GameMap): TerrainHandle {
   const patch = (x: number, y: number) => inB(x, y) && map.patch[y * w + x] === 1;
   const plateau = (x: number, y: number) => inB(x, y) && map.plateau[y * w + x] === 1;
   const cliff = (x: number, y: number) => inB(x, y) && map.cliff[y * w + x] === 1;
+  const rampAt = (x: number, y: number) => (inB(x, y) ? map.ramp[y * w + x] : 0);
+  // para o autotile, a parte de cima da rampa conta como planalto e a de baixo como penhasco:
+  // assim a encosta encaixa sem borda no meio
+  const plateauOrRamp = (x: number, y: number) => plateau(x, y) || rampAt(x, y) === RAMP.upLeft || rampAt(x, y) === RAMP.upRight;
+  const cliffOrRamp = (x: number, y: number) => cliff(x, y) || rampAt(x, y) === RAMP.downLeft || rampAt(x, y) === RAMP.downRight;
+  /** Tiles de rampa no tileset: coluna 0 desce para a esquerda, coluna 3 para a direita (linhas 4 e 5). */
+  const RAMP_TILE: Record<number, number> = {
+    [RAMP.upLeft]: 4 * TILESET_COLS + 0,
+    [RAMP.downLeft]: 5 * TILESET_COLS + 0,
+    [RAMP.upRight]: 4 * TILESET_COLS + 3,
+    [RAMP.downRight]: 5 * TILESET_COLS + 3,
+  };
 
   // espuma animada sob os tiles de terra da costa
   for (let y = 0; y < h; y++)
@@ -51,14 +63,15 @@ export function drawTerrain(scene: Phaser.Scene, map: GameMap): TerrainHandle {
       for (let x = 0; x < w; x++) {
         if (land(x, y)) ground.putTileAt(autotileIndex(land, x, y, GRASS_BASE), x, y);
         if (patch(x, y) && !plateau(x, y) && !cliff(x, y)) patches.putTileAt(autotileIndex(patch, x, y, GRASS_BASE), x, y);
-        if (plateau(x, y)) relief.putTileAt(autotileIndex(plateau, x, y, PLATEAU_BASE), x, y);
-        else if (cliff(x, y)) relief.putTileAt(cliffIndex(cliff, x, y), x, y);
+        if (plateau(x, y)) relief.putTileAt(autotileIndex(plateauOrRamp, x, y, PLATEAU_BASE), x, y);
+        else if (cliff(x, y)) relief.putTileAt(cliffIndex(cliffOrRamp, x, y), x, y);
+        else if (rampAt(x, y)) relief.putTileAt(RAMP_TILE[rampAt(x, y)], x, y);
       }
   }
   // sombra suave dos planaltos projetada para baixo
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++)
-      if (cliff(x, y)) scene.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2 + 20, 'shadow').setAlpha(0.35).setDepth(-1990);
+      if (cliffOrRamp(x, y)) scene.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2 + 20, 'shadow').setAlpha(0.35).setDepth(-1990);
 
   for (const d of map.decor) {
     if (!scene.textures.exists(d.key)) continue;

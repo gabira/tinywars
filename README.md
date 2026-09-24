@@ -70,9 +70,25 @@ Os dois reinos têm as mesmas unidades e construções:
 
 Ouro vem das jazidas de pedras douradas (até 4 peões por vez; a pedra encolhe conforme se esgota), madeira das árvores (que viram tocos) e carne das ovelhas. As ovelhas renascem depois de um tempo.
 
+As jazidas têm tamanhos diferentes: quanto mais arriscado o lugar, mais ouro.
+
+| Onde | Ouro |
+|---|---|
+| Ao lado de cada base | 1.500 |
+| No planalto ao lado da base | 2.000 |
+| No chão, no meio do mapa | 2.500 |
+| Nos planaltos disputados | 3.000 |
+
+**Planaltos:** cada mapa tem 6 planaltos (um ao lado de cada base e quatro disputados no meio), com floresta, jazida e ovelhas no topo.
+
+- Só se sobe e desce pelas **rampas** nas laterais do penhasco; as bordas não deixam passar.
+- Dá para **construir lá em cima**, com a construção inteira no topo e sem tapar a rampa. Uma base no alto fica protegida, com uma entrada só.
+- **Vantagem da altura:** no alto, arqueiros e torres ganham +1 tile de alcance contra quem está embaixo e +2 de visão; as outras unidades, +1 de visão.
+- De baixo **não se enxerga o topo**, só a beirada. Unidades embaixo também não atacam sozinhas quem está em cima.
+
 **Cor do reino** (escolhida no menu): Azul, Vermelho, Amarelo, Roxo ou Preto. O reino rival fica com vermelho, ou preto se você escolher vermelho.
 
-**Mapa:** ilha de 96×72 tiles gerada a cada partida, simétrica para os dois lados, com planaltos rochosos intransponíveis, jazidas de ouro contestadas e rebanhos de ovelhas no meio.
+**Mapa:** ilha de 96×72 tiles gerada a cada partida, simétrica para os dois lados, com planaltos, jazidas de ouro contestadas e rebanhos de ovelhas no meio.
 
 **Dificuldade** (escolhida no menu): Fácil, Normal ou Difícil. Muda a velocidade de decisão da IA, o ritmo de coleta, o tamanho das ondas e o primeiro ataque: cerca de 7, 5 e 3,5 minutos.
 
