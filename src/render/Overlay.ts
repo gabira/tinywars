@@ -3,6 +3,7 @@ import { COLORS, TILE } from '../config';
 import { UNITS } from '../data/units';
 import type { AnyEntity } from '../entities/Entity';
 import type { Session } from '../game/Session';
+import { teamColor } from './palette';
 import { buildingVisual } from './visuals';
 
 interface Marker {
@@ -65,7 +66,8 @@ export class Overlay {
       this.hpBar(e.x, e.y - (e.def.sheet === 'barrel' ? 44 : 64), 34, e.hp / e.maxHp, 4);
     } else if (e.kind === 'building') {
       const r = e.rect;
-      const top = r.y - buildingVisual(e.def.id, true).height - 14;
+      // em construção só há a fundação (baixa): a barra fica logo acima do footprint
+      const top = r.y - (e.complete ? buildingVisual(e.def.id, teamColor(e.team), true).height : 0) - 14;
       const w = Math.min(r.w * 0.7, 130);
       this.hpBar(r.x + r.w / 2, top, w, e.hp / e.maxHp, 6);
       if (!e.complete) {

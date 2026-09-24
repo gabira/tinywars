@@ -4,8 +4,11 @@ import type { Session } from '../game/Session';
 import type { CameraController } from '../input/CameraController';
 import { smartCommand } from '../systems/commands';
 import { selectedOwnUnits } from '../game/commandCard';
+import { MINIMAP_COLORS, teamColor } from '../render/palette';
 
-const PX = 3;
+/** Tamanho máximo do minimapa no painel inferior (px). */
+const MAX_W = 192;
+const MAX_H = 144;
 
 /** Minimapa com terreno, recursos, construções, unidades, névoa e a área da câmera. */
 export class Minimap {
@@ -18,6 +21,8 @@ export class Minimap {
   private last = 0;
   private pings: { x: number; y: number; t: number }[] = [];
   private dragging = false;
+  /** Pixels por tile (depende do tamanho do mapa). */
+  private px: number;
 
   constructor(
     scene: Phaser.Scene,
@@ -25,6 +30,8 @@ export class Minimap {
     private getCam: () => { cam: Phaser.Cameras.Scene2D.Camera; ctl: CameraController } | null,
   ) {
     const m = session.world.map;
+    this.px = Math.max(1, Math.floor(Math.min(MAX_W / m.w, MAX_H / m.h)));
+    const PX = this.px;
     this.width = m.w * PX;
     this.height = m.h * PX;
     if (scene.textures.exists('minimap')) scene.textures.remove('minimap');
@@ -57,6 +64,7 @@ export class Minimap {
   }
 
   private toWorld(p: Phaser.Input.Pointer): { x: number; y: number } {
+    const PX = this.px;
     return { x: ((p.x - this.image.x) / PX) * TILE, y: ((p.y - this.image.y) / PX) * TILE };
   }
 
@@ -74,6 +82,7 @@ export class Minimap {
 
   update(now: number): void {
     if (now - this.last < 200) return;
+    const PX = this.px;
     this.last = now;
     const w = this.session.world;
     const v = w.vision;
@@ -87,7 +96,7 @@ export class Minimap {
         ctx.fillStyle = '#2f5d34';
         ctx.fillRect(r.tx * PX, r.ty * PX, PX, PX);
       } else if (r.def.kind === 'goldMine') {
-        ctx.fillStyle = '#f7d154';
+        ctx.fillStyle = '#fff4c2';
         ctx.fillRect(r.tx * PX, r.ty * PX, r.def.w * PX, r.def.h * PX);
       } else {
         ctx.fillStyle = '#ffffff';
@@ -96,12 +105,12 @@ export class Minimap {
     }
     for (const b of w.buildings) {
       if (!b.alive || (b.team !== 0 && !v.rectExplored(b.tx, b.ty, b.def.w, b.def.h))) continue;
-      ctx.fillStyle = b.team === 0 ? '#3b82f6' : '#e04848';
+      ctx.fillStyle = MINIMAP_COLORS[teamColor(b.team)].building;
       ctx.fillRect(b.tx * PX, b.ty * PX, b.def.w * PX, b.def.h * PX);
     }
     for (const u of w.units) {
       if (!u.alive || u.hidden || (u.team !== 0 && !v.pointVisible(u.x, u.y))) continue;
-      ctx.fillStyle = u.team === 0 ? '#9cc9ff' : '#ff8080';
+      ctx.fillStyle = MINIMAP_COLORS[teamColor(u.team)].unit;
       ctx.fillRect((u.x / TILE) * PX - 1, (u.y / TILE) * PX - 1, 3, 3);
     }
     if (v.enabled) {

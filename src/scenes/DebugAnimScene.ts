@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SHEETS } from '../assets/assetManifest';
+import { allSheets } from '../assets/assetManifest';
 import { FONT } from '../config';
 
 /** ?debug=anims — mostra todas as animações com o nome, para conferir as linhas das spritesheets. */
@@ -15,7 +15,7 @@ export class DebugAnimScene extends Phaser.Scene {
     const colW = 150;
     const rowH = 150;
     const maxX = Math.max(900, this.scale.width - 80);
-    for (const s of SHEETS) {
+    for (const s of allSheets()) {
       if (!s.anims || !this.textures.exists(s.key)) continue;
       for (const name of Object.keys(s.anims)) {
         const key = `${s.key}.${name}`;

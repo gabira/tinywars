@@ -3,6 +3,7 @@ import { GoblinAI } from '../ai/GoblinAI';
 import { DEBUG } from '../config';
 import type { DifficultyLevel } from '../data/difficulty';
 import type { BuildingId } from '../data/types';
+import type { TeamColor } from '../render/palette';
 import { World } from '../systems/World';
 
 export type InputMode = 'normal' | 'place' | 'attackMove';
@@ -24,6 +25,8 @@ export class Session {
   constructor(
     readonly seed: number,
     readonly difficulty: DifficultyLevel,
+    /** Cor do exército do jogador (só visual). */
+    readonly color: TeamColor,
   ) {
     this.world = new World({ seed, difficulty, fog: !DEBUG.noFog });
     this.ai = new GoblinAI(this.world, 1);
@@ -72,9 +75,9 @@ export function getSession(): Session {
   return current;
 }
 
-export function newSession(seed: number, difficulty: DifficultyLevel): Session {
+export function newSession(seed: number, difficulty: DifficultyLevel, color: TeamColor): Session {
   current?.ui.removeAllListeners();
   current?.world.events.clear();
-  current = new Session(seed, difficulty);
+  current = new Session(seed, difficulty, color);
   return current;
 }

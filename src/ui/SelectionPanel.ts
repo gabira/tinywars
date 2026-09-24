@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config';
-import { TEAMS } from '../data/factions';
+import { teamColor } from '../render/palette';
 import { UNITS } from '../data/units';
 import type { AnyEntity, Building, ResourceNode, Unit } from '../entities/Entity';
 import type { Session } from '../game/Session';
@@ -112,7 +112,7 @@ export class SelectionPanel {
   private unitInfo(u: Unit): void {
     const own = u.team === 0;
     const tx = this.header(S.units[u.def.id].name, own ? null : S.panel.enemy, (x, y, s) =>
-      portrait(this.scene, `${u.def.sheet}_${TEAMS[u.team].color}`, x, y, s),
+      portrait(this.scene, `${u.def.sheet}_${teamColor(u.team)}`, x, y, s),
     );
     const barW = Math.min(200, this.w - (tx - this.x) - 10);
     const hpY = this.y + (own ? 44 : 62);
@@ -129,7 +129,7 @@ export class SelectionPanel {
 
   private buildingInfo(b: Building): void {
     const own = b.team === 0;
-    const tx = this.header(S.buildings[b.def.id].name, own ? null : S.panel.enemy, (x, y, s) => buildingThumb(this.scene, b.def.id, x, y, s));
+    const tx = this.header(S.buildings[b.def.id].name, own ? null : S.panel.enemy, (x, y, s) => buildingThumb(this.scene, b.def.id, x, y, s, teamColor(b.team)));
     const barW = Math.min(200, this.w - (tx - this.x) - 10);
     const hpY = this.y + (own ? 44 : 62);
     this.hpBar(tx, hpY, barW, () => b.hp / b.maxHp);
@@ -155,7 +155,7 @@ export class SelectionPanel {
       });
       bg.on('pointerover', () => bg.setStrokeStyle(2, 0xff9b8a));
       bg.on('pointerout', () => bg.setStrokeStyle(2, 0x6b4a2b));
-      this.add(portrait(this.scene, `${UNITS[item.unit].sheet}_blue`, x, y, slot - 6));
+      this.add(portrait(this.scene, `${UNITS[item.unit].sheet}_${teamColor(b.team)}`, x, y, slot - 6));
       if (i === 0) {
         const bar = this.add(this.scene.add.rectangle(x - slot / 2, y + slot / 2 + 4, 0, 4, 0xf7d154).setOrigin(0, 0.5));
         this.dyn.push(() => {
@@ -199,7 +199,7 @@ export class SelectionPanel {
         if (p.event.shiftKey) s.setSelection(s.selection.filter((id) => id !== u.id));
         else s.setSelection([u.id]);
       });
-      this.add(portrait(this.scene, `${u.def.sheet}_${TEAMS[u.team].color}`, x, y - 2, size - 8));
+      this.add(portrait(this.scene, `${u.def.sheet}_${teamColor(u.team)}`, x, y - 2, size - 8));
       const hb = this.add(this.scene.add.rectangle(x - size / 2 + 3, y + size / 2 - 4, size - 6, 3, COLORS.hpGood).setOrigin(0, 0.5));
       this.dyn.push(() => {
         const f = Math.max(0, u.hp / u.maxHp);

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, HUD_BOTTOM, HUD_TOP } from '../config';
 import type { Team } from '../data/types';
 import { getSession, type Session } from '../game/Session';
+import { teamColor } from '../render/palette';
 import { S, clockText, fmt } from '../i18n/t';
 import { CARD_W, CommandCardView } from '../ui/CommandCardView';
 import { Minimap } from '../ui/Minimap';
@@ -77,7 +78,7 @@ export class HudScene extends Phaser.Scene {
       this.resTexts[res] = t;
       x += 150;
     }
-    const popIcon = this.add.image(x + 12, HUD_TOP / 2 - 2, 'house_blue').setScale(0.2);
+    const popIcon = this.add.image(x + 12, HUD_TOP / 2 - 2, `house_${teamColor(0)}`).setScale(0.2);
     const pop = this.add.text(x + 30, HUD_TOP / 2 - 2, '', textStyle(18)).setOrigin(0, 0.5);
     this.staticLayer.add([popIcon, pop]);
     this.resTexts.pop = pop;

@@ -29,14 +29,19 @@ export interface ImageDef {
   optional?: boolean;
 }
 
-const COLORS = { blue: 'Blue', red: 'Red' } as const;
-type Color = keyof typeof COLORS;
+import { TEAM_COLORS, type TeamColor } from '../render/palette';
+
+/** Nome da pasta/arquivo de cada cor no pacote. */
+const COLOR_DIR: Record<TeamColor, string> = { blue: 'Blue', red: 'Red', purple: 'Purple', yellow: 'Yellow' };
+/** O arquivo do arqueiro roxo tem um erro de digitação no pacote original. */
+const ARCHER_FILE: Record<TeamColor, string> = { blue: 'Blue', red: 'Red', purple: 'Purlple', yellow: 'Yellow' };
 
 const once = (row: number, frames: number, fps = 10): AnimDef => ({ row, frames, fps, repeat: 0 });
 const loop = (row: number, frames: number, fps = 10): AnimDef => ({ row, frames, fps, repeat: -1 });
 
-function troopSheets(color: Color): SheetDef[] {
-  const C = COLORS[color];
+/** Spritesheets que dependem da cor do exército. */
+export function teamSheets(color: TeamColor): SheetDef[] {
+  const C = COLOR_DIR[color];
   const K = 'Factions/Knights/Troops';
   const G = 'Factions/Goblins/Troops';
   return [
@@ -54,7 +59,7 @@ function troopSheets(color: Color): SheetDef[] {
       },
     },
     {
-      key: `archer_${color}`, pack: 'legacy', path: `${K}/Archer/${C}/Archer_${C === 'Blue' ? 'Blue' : 'Red'}.png`, frameWidth: 192, frameHeight: 192,
+      key: `archer_${color}`, pack: 'legacy', path: `${K}/Archer/${C}/Archer_${ARCHER_FILE[color]}.png`, frameWidth: 192, frameHeight: 192,
       anims: {
         idle: loop(0, 6), run: loop(1, 6),
         shootUp: once(2, 8, 13), shootUpRight: once(3, 8, 13), shootRight: once(4, 8, 13), shootDownRight: once(5, 8, 13), shootDown: once(6, 8, 13),
@@ -74,12 +79,15 @@ function troopSheets(color: Color): SheetDef[] {
         hidden: loop(0, 1), popOut: once(1, 6), awake: loop(2, 1), hide: once(3, 6), run: loop(4, 3), ignite: once(5, 3, 8),
       },
     },
+    {
+      key: `wood_tower_${color}`, pack: 'legacy', path: `Factions/Goblins/Buildings/Wood_Tower/Wood_Tower_${C}.png`,
+      frameWidth: 256, frameHeight: 192, anims: { idle: loop(0, 4, 8) },
+    },
   ];
 }
 
-export const SHEETS: SheetDef[] = [
-  ...troopSheets('blue'),
-  ...troopSheets('red'),
+/** Spritesheets que não dependem de cor. */
+export const BASE_SHEETS: SheetDef[] = [
   { key: 'dynamite', pack: 'legacy', path: 'Factions/Goblins/Troops/TNT/Dynamite/Dynamite.png', frameWidth: 64, frameHeight: 64, anims: { spin: loop(0, 6, 14) } },
   { key: 'arrow', pack: 'legacy', path: 'Factions/Knights/Troops/Archer/Arrow/Arrow.png', frameWidth: 64, frameHeight: 64 },
   { key: 'dead', pack: 'legacy', path: 'Factions/Knights/Troops/Dead/Dead.png', frameWidth: 128, frameHeight: 128, anims: { die: once(0, 7), fade: once(1, 7, 6) } },
@@ -88,8 +96,6 @@ export const SHEETS: SheetDef[] = [
   { key: 'explosion', pack: 'legacy', path: 'Effects/Explosion/Explosions.png', frameWidth: 192, frameHeight: 192, anims: { play: once(0, 9, 14) } },
   { key: 'fire', pack: 'legacy', path: 'Effects/Fire/Fire.png', frameWidth: 128, frameHeight: 128, anims: { play: loop(0, 7) } },
   { key: 'foam', pack: 'legacy', path: 'Terrain/Water/Foam/Foam.png', frameWidth: 192, frameHeight: 192, anims: { play: loop(0, 8, 8) } },
-  { key: 'wood_tower_red', pack: 'legacy', path: 'Factions/Goblins/Buildings/Wood_Tower/Wood_Tower_Red.png', frameWidth: 256, frameHeight: 192, anims: { idle: loop(0, 4, 8) } },
-  { key: 'wood_tower_blue', pack: 'legacy', path: 'Factions/Goblins/Buildings/Wood_Tower/Wood_Tower_Blue.png', frameWidth: 256, frameHeight: 192, anims: { idle: loop(0, 4, 8) } },
   { key: 'g_spawn', pack: 'legacy', path: 'Resources/Resources/G_Spawn.png', frameWidth: 128, frameHeight: 128, anims: { play: once(0, 7, 14) } },
   { key: 'w_spawn', pack: 'legacy', path: 'Resources/Resources/W_Spawn.png', frameWidth: 128, frameHeight: 128, anims: { play: once(0, 7, 14) } },
   { key: 'm_spawn', pack: 'legacy', path: 'Resources/Resources/M_Spawn.png', frameWidth: 128, frameHeight: 128, anims: { play: once(0, 7, 14) } },
@@ -104,16 +110,25 @@ const KB = 'Factions/Knights/Buildings';
 const GB = 'Factions/Goblins/Buildings';
 const FUI = 'UI Elements/UI Elements';
 
-export const IMAGES: ImageDef[] = [
+/** Imagens de construções que dependem da cor do exército. */
+export function teamImages(color: TeamColor): ImageDef[] {
+  const C = COLOR_DIR[color];
+  return [
+    img(`castle_${color}`, `${KB}/Castle/Castle_${C}.png`),
+    img(`house_${color}`, `${KB}/House/House_${C}.png`),
+    img(`tower_${color}`, `${KB}/Tower/Tower_${C}.png`),
+    // Free Pack (opcional): o quartel tem arte própria; sem ele, usa um visual alternativo
+    img(`barracks_${color}`, `Buildings/${C} Buildings/Barracks.png`, 'free', true),
+  ];
+}
+
+/** Imagens que não dependem de cor. */
+export const BASE_IMAGES: ImageDef[] = [
   img('water', 'Terrain/Water/Water.png'),
-  img('castle_blue', `${KB}/Castle/Castle_Blue.png`),
-  img('castle_red', `${KB}/Castle/Castle_Red.png`),
   img('castle_construction', `${KB}/Castle/Castle_Construction.png`),
   img('castle_destroyed', `${KB}/Castle/Castle_Destroyed.png`),
-  img('house_blue', `${KB}/House/House_Blue.png`),
   img('house_construction', `${KB}/House/House_Construction.png`),
   img('house_destroyed', `${KB}/House/House_Destroyed.png`),
-  img('tower_blue', `${KB}/Tower/Tower_Blue.png`),
   img('tower_construction', `${KB}/Tower/Tower_Construction.png`),
   img('tower_destroyed', `${KB}/Tower/Tower_Destroyed.png`),
   img('goblin_house', `${GB}/Wood_House/Goblin_House.png`),
@@ -151,8 +166,7 @@ export const IMAGES: ImageDef[] = [
   img('ui_ribbon_yellow', 'UI/Ribbons/Ribbon_Yellow_3Slides.png'),
   img('ui_icon_x', 'UI/Icons/Regular_01.png'),
   img('ui_icon_gear', 'UI/Icons/Regular_02.png'),
-  // Free Pack (opcional): quartel e ícones melhores
-  img('barracks_blue', 'Buildings/Blue Buildings/Barracks.png', 'free', true),
+  // Free Pack (opcional): ícones melhores
   img('icon_hammer', `${FUI}/Icons/Icon_01.png`, 'free', true),
   img('icon_wood', `${FUI}/Icons/Icon_02.png`, 'free', true),
   img('icon_gold', `${FUI}/Icons/Icon_03.png`, 'free', true),
@@ -165,10 +179,12 @@ export const IMAGES: ImageDef[] = [
   img('icon_gear', `${FUI}/Icons/Icon_10.png`, 'free', true),
 ];
 
-/** Todos os caminhos de assets usados (para validação/testes). */
-export function allAssetPaths(): { pack: Pack; path: string; optional: boolean }[] {
-  return [
-    ...SHEETS.map((s) => ({ pack: s.pack, path: s.path, optional: !!s.optional })),
-    ...IMAGES.map((i) => ({ pack: i.pack, path: i.path, optional: !!i.optional })),
-  ];
+/** Todas as spritesheets (base + todas as cores). */
+export function allSheets(): SheetDef[] {
+  return [...BASE_SHEETS, ...TEAM_COLORS.flatMap(teamSheets)];
+}
+
+/** Todas as imagens (base + todas as cores). */
+export function allImages(): ImageDef[] {
+  return [...BASE_IMAGES, ...TEAM_COLORS.flatMap(teamImages)];
 }

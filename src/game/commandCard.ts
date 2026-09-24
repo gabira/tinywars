@@ -3,6 +3,7 @@ import { TEAMS } from '../data/factions';
 import type { BuildingId, Cost, UnitId } from '../data/types';
 import { UNITS } from '../data/units';
 import type { Building, Unit } from '../entities/Entity';
+import { teamColor } from '../render/palette';
 import { S, fmt, resName } from '../i18n/t';
 import type { CommandResult } from '../systems/commands';
 import type { Session } from './Session';
@@ -155,7 +156,7 @@ export function commandCard(session: Session): CardButton[] {
         hotkey: 'B',
         name: S.cmd.build,
         desc: S.cmdDesc.build,
-        icon: { kind: 'image', key: 'icon_hammer', fallback: 'house_blue' },
+        icon: { kind: 'image', key: 'icon_hammer', fallback: `house_${teamColor(0)}` },
         enabled: true,
         action: () => {
           session.buildMenu = true;
@@ -203,11 +204,20 @@ export function commandCard(session: Session): CardButton[] {
         desc: S.units[uid].desc,
         cost: def.cost,
         time: def.trainTime,
-        icon: { kind: 'unit', sheet: `${def.sheet}_${TEAMS[0].color}` },
+        icon: { kind: 'unit', sheet: `${def.sheet}_${teamColor(0)}` },
         enabled: player.canAfford(def.cost),
         action: () => report(session, w.issue(0, { type: 'train', buildingId: b.id, unit: uid })),
       });
     });
   }
   return buttons;
+}
+
+/**
+ * Assinatura do cartão: quando muda, o HUD recria os botões. As ações dos botões guardam as
+ * entidades selecionadas, então a seleção faz parte da assinatura — senão dois quartéis
+ * (com botões idênticos) compartilhariam os botões do primeiro.
+ */
+export function cardSignature(session: Session, buttons: CardButton[]): string {
+  return `${session.selection.join(',')}|` + buttons.map((b) => `${b.slot}${b.name}${b.enabled ? 1 : 0}${b.active ? 1 : 0}`).join(';');
 }

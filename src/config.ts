@@ -2,8 +2,9 @@ export const TILE = 64;
 export const SIM_HZ = 20;
 export const SIM_DT = 1 / SIM_HZ;
 
-export const MAP_W = 64;
-export const MAP_H = 48;
+/** Tamanho do mapa em tiles (96x72 = 50% maior em cada eixo que o original 64x48). */
+export const MAP_W = 96;
+export const MAP_H = 72;
 
 /** Alturas das faixas do HUD (em pixels de tela). */
 export const HUD_TOP = 40;

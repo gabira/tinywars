@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { TILE } from '../config';
 import type { GameMap } from '../map/MapGenerator';
 import { autotileIndex, GRASS_BASE, SAND_BASE } from '../map/autotile';
-import { ORIGIN_Y } from './visuals';
+import { originY } from './visuals';
 
 /** Desenha água, espuma, grama/areia (tilemap) e decoração. */
 export function drawTerrain(scene: Phaser.Scene, map: GameMap): void {
@@ -65,8 +65,8 @@ export function drawTerrain(scene: Phaser.Scene, map: GameMap): void {
   for (const d of map.decor) {
     if (!scene.textures.exists(d.key)) continue;
     const img = scene.add.image(d.tx * TILE + TILE / 2 + d.ox, d.ty * TILE + TILE / 2 + d.oy, d.key);
-    img.setOrigin(0.5, ORIGIN_Y[d.key] ?? 0.66);
+    img.setOrigin(0.5, originY(d.key) ?? 0.66);
     // decoração pequena fica no chão; placas e espantalho ordenam com as unidades
-    img.setDepth(ORIGIN_Y[d.key] ? img.y : -1500);
+    img.setDepth(originY(d.key) ? img.y : -1500);
   }
 }

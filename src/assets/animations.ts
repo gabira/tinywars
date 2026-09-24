@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { SHEETS } from './assetManifest';
+import { allSheets } from './assetManifest';
 
 /** Cria as animações de todas as spritesheets carregadas: chave `${sheet}.${anim}`. */
 export function registerAnimations(scene: Phaser.Scene): void {
-  for (const s of SHEETS) {
+  for (const s of allSheets()) {
     if (!s.anims || !scene.textures.exists(s.key)) continue;
     const tex = scene.textures.get(s.key);
     const cols = Math.floor(tex.getSourceImage().width / s.frameWidth);

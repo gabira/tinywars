@@ -12,13 +12,11 @@ export class ViewManager {
   private leftovers: ResourceView[] = [];
   private frame = 0;
   private destroyed = new Set<number>();
-  private hasBarracksArt: boolean;
 
   constructor(
     private scene: Phaser.Scene,
     private world: World,
   ) {
-    this.hasBarracksArt = scene.textures.exists('barracks_blue');
     world.events.on((e) => {
       if (e.type === 'buildingDestroyed') this.destroyed.add(e.id);
     });
@@ -48,7 +46,7 @@ export class ViewManager {
     for (const b of w.buildings) {
       let v = this.buildings.get(b.id);
       if (!v) {
-        v = new BuildingView(this.scene, b, this.hasBarracksArt);
+        v = new BuildingView(this.scene, b);
         this.buildings.set(b.id, v);
       }
       v.seen = f;

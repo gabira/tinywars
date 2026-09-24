@@ -1,3 +1,4 @@
+import { MAP_H, MAP_W } from '../config';
 import { Rng } from '../core/rng';
 import type { ResourceKind } from '../data/types';
 import { RESOURCES } from '../data/resources';
@@ -35,15 +36,17 @@ export const MAIN_W = 5;
 export const MAIN_H = 3;
 
 /** Gera um mapa de ilha com simetria central (justo para os dois lados). */
-export function generateMap(seed: number, w = 64, h = 48): GameMap {
+export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
   const rng = new Rng(seed);
+  /** Quanto o mapa é maior (em área) que o 64x48 original: escala a quantidade de elementos. */
+  const k = (w * h) / (64 * 48);
   const N = w * h;
   const idx = (x: number, y: number) => y * w + x;
   const inB = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h;
 
   // --- ruído de valor para bordas irregulares
-  const gw = 9;
-  const gh = 7;
+  const gw = Math.round(w / 8) + 1;
+  const gh = Math.round(h / 8) + 1;
   const grid = Array.from({ length: gw * gh }, () => rng.next());
   const noise = (x: number, y: number) => {
     const fx = (x / (w - 1)) * (gw - 1);
@@ -67,7 +70,7 @@ export function generateMap(seed: number, w = 64, h = 48): GameMap {
     }
 
   // lagos pequenos (espelhados depois)
-  const lakes = rng.int(1, 2);
+  const lakes = rng.int(1, 2) + Math.round(k) - 1;
   for (let i = 0; i < lakes; i++) {
     const cx = rng.int(Math.floor(w * 0.3), Math.floor(w * 0.45));
     const cy = rng.int(Math.floor(h * 0.15), Math.floor(h * 0.4));
@@ -189,11 +192,27 @@ export function generateMap(seed: number, w = 64, h = 48): GameMap {
     [Math.floor(w / 2) - 9, Math.floor(h / 2) + 1],
     [Math.floor(w / 2) - 11, Math.floor(h / 2) - 2],
     [Math.floor(w / 2) - 7, Math.floor(h / 2) + 4],
+    [Math.floor(w * 0.3), Math.floor(h * 0.25)],
+    [Math.floor(w * 0.45), Math.floor(h * 0.15)],
+    [Math.floor(w * 0.2), Math.floor(h * 0.4)],
   ];
-  for (const [x, y] of midMines) if (addPair('goldMine', x, y, 1)) break;
+  const minePairs = Math.max(1, Math.round(k * 0.9));
+  let minesPlaced = 0;
+  for (const [x, y] of midMines) {
+    if (minesPlaced >= minePairs) break;
+    if (addPair('goldMine', x, y, 1)) minesPlaced++;
+  }
+
+  // rebanhos neutros no meio do mapa (mais carne no mapa maior)
+  for (let flock = 0; flock < Math.round(k * 1.5) - 1; flock++) {
+    const fx = rng.range(8, w - 8);
+    const fy = rng.range(6, h / 2);
+    if (Math.hypot(fx - c0.x, fy - c0.y) < 14 || Math.hypot(w - 1 - fx - c0.x, h - 1 - fy - c0.y) < 14) continue;
+    for (let s = 0; s < 3; s++) addPair('sheep', Math.round(fx + rng.range(-2, 2)), Math.round(fy + rng.range(-1.5, 1.5)));
+  }
 
   // florestas espalhadas
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < Math.round(7 * k); i++) {
     const x = rng.range(4, w - 4);
     const y = rng.range(3, h / 2);
     const dA = Math.hypot(x - c0.x, y - c0.y);
@@ -260,7 +279,7 @@ export function generateMap(seed: number, w = 64, h = 48): GameMap {
 
   // --- areia decorativa
   const sand = new Uint8Array(N);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < Math.round(4 * k); i++) {
     const cx = rng.range(6, w - 6);
     const cy = rng.range(4, h / 2);
     const r = rng.range(1.8, 3.2);
@@ -292,7 +311,7 @@ export function generateMap(seed: number, w = 64, h = 48): GameMap {
   const decor: Decor[] = [];
   const knightsDeco = ['deco_01', 'deco_02', 'deco_04', 'deco_05', 'deco_07', 'deco_08', 'deco_10', 'deco_11', 'deco_12', 'deco_13'];
   const goblinDeco = ['deco_14', 'deco_15', 'deco_03', 'deco_06', 'deco_09'];
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < Math.round(90 * k); i++) {
     const x = rng.int(1, w - 2);
     const y = rng.int(1, h - 2);
     if (!land[idx(x, y)] || occ[idx(x, y)]) continue;

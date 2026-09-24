@@ -61,6 +61,10 @@ Se o itch.io bloquear o download automático, o script explica como baixar à m�
 
 Ouro vem da mina (até 3 peões por vez), madeira das árvores e carne das ovelhas. As ovelhas renascem depois de um tempo. Castelo e casas recebem os recursos.
 
+**Cor do exército** (escolhida no menu): Azul, Vermelho, Roxo ou Amarelo. A IA fica com vermelho, ou azul se você escolher vermelho.
+
+**Mapa:** ilha de 96×72 tiles gerada a cada partida, simétrica para os dois lados, com minas de ouro contestadas e rebanhos de ovelhas no meio.
+
 **Dificuldade** (escolhida no menu): Fácil, Normal ou Difícil. Muda a velocidade de decisão da IA, o ritmo de coleta, o tamanho das ondas e o primeiro ataque: cerca de 7, 5 e 3,5 minutos.
 
 ## Opções de depuração (na URL)

@@ -1,5 +1,6 @@
 import { TILE } from '../config';
-import type { AnyEntity, Unit } from '../entities/Entity';
+import type { AnyEntity, Building, Unit } from '../entities/Entity';
+import { teamColor } from '../render/palette';
 import { buildingVisual } from '../render/visuals';
 import type { World } from '../systems/World';
 
@@ -16,13 +17,18 @@ export function pickAt(world: World, wx: number, wy: number): AnyEntity | null {
     }
   }
   if (best) return best;
+  // construções: se o clique cai em duas (o telhado de uma sobre a outra), vale a da frente
+  let front: Building | null = null;
   for (const b of world.buildings) {
     if (!b.alive) continue;
     if (b.team !== 0 && !v.rectExplored(b.tx, b.ty, b.def.w, b.def.h)) continue;
     const r = b.rect;
-    const extra = buildingVisual(b.def.id, true).height;
-    if (wx >= r.x && wx <= r.x + r.w && wy >= r.y - extra && wy <= r.y + r.h) return b;
+    const extra = buildingVisual(b.def.id, teamColor(b.team), true).height;
+    if (wx >= r.x && wx <= r.x + r.w && wy >= r.y - extra && wy <= r.y + r.h) {
+      if (!front || r.y + r.h > front.rect.y + front.rect.h) front = b;
+    }
   }
+  if (front) return front;
   for (const r of world.resources) {
     if (!r.alive || !v.rectExplored(r.tx, r.ty, r.def.w, r.def.h)) continue;
     if (r.def.kind === 'tree') {

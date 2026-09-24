@@ -79,10 +79,11 @@ export class AStar {
   private closed: Uint32Array;
   private curGen = 0;
   private heap: MinHeap;
-  maxExpansions = 8000;
+  maxExpansions: number;
 
   constructor(private grid: NavGrid) {
     const n = grid.w * grid.h;
+    this.maxExpansions = n;
     this.g = new Float32Array(n);
     this.f = new Float32Array(n);
     this.from = new Int32Array(n);

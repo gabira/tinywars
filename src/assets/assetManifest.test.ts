@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { IMAGES, SHEETS } from './assetManifest';
+import { allImages, allSheets } from './assetManifest';
 
 const indexPath = path.resolve(__dirname, '../../public/assets/assets-index.json');
 const hasIndex = fs.existsSync(indexPath);
@@ -10,7 +10,7 @@ describe.skipIf(!hasIndex)('assetManifest × arquivos baixados', () => {
   const index = hasIndex ? (JSON.parse(fs.readFileSync(indexPath, 'utf8')) as { packs: Record<string, { files: Record<string, [number, number]> }> }) : null;
 
   it('todas as spritesheets obrigatórias existem e a grade bate com as animações', () => {
-    for (const s of SHEETS) {
+    for (const s of allSheets()) {
       const dims = index!.packs[s.pack]?.files[s.path];
       if (!dims) {
         expect(s.optional, `faltando: ${s.path}`).toBe(true);
@@ -29,7 +29,7 @@ describe.skipIf(!hasIndex)('assetManifest × arquivos baixados', () => {
   });
 
   it('todas as imagens obrigatórias existem', () => {
-    for (const i of IMAGES) {
+    for (const i of allImages()) {
       if (i.optional) continue;
       expect(index!.packs[i.pack]?.files[i.path], `faltando: ${i.path}`).toBeTruthy();
     }

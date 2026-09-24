@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config';
 import { RES_TYPES } from '../data/types';
-import { commandCard, type CardButton } from '../game/commandCard';
+import { cardSignature, commandCard, type CardButton } from '../game/commandCard';
 import type { Session } from '../game/Session';
 import { S, fmt } from '../i18n/t';
 import { iconFor } from './icons';
@@ -35,7 +35,7 @@ export class CommandCardView {
 
   update(): void {
     const buttons = commandCard(this.session);
-    const sig = `${this.x},${this.y}|` + buttons.map((b) => `${b.slot}${b.name}${b.enabled ? 1 : 0}${b.active ? 1 : 0}`).join(';');
+    const sig = `${this.x},${this.y}|${cardSignature(this.session, buttons)}`;
     if (sig === this.sig) return;
     this.sig = sig;
     this.root.removeAll(true);

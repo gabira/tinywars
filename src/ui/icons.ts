@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { BuildingId } from '../data/types';
 import type { IconSpec } from '../game/commandCard';
-import { buildingVisual } from '../render/visuals';
+import { teamColor, type TeamColor } from '../render/palette';
+import { teamVisual } from '../render/visuals';
 
 /** Retrato de unidade: recorte do quadro 0 da spritesheet, centralizado em (x, y). */
 export function portrait(scene: Phaser.Scene, sheetKey: string, x: number, y: number, size: number): Phaser.GameObjects.Image {
@@ -18,8 +19,15 @@ export function portrait(scene: Phaser.Scene, sheetKey: string, x: number, y: nu
 }
 
 /** Miniatura de construção ajustada a um quadrado. */
-export function buildingThumb(scene: Phaser.Scene, id: BuildingId, x: number, y: number, size: number): Phaser.GameObjects.Image | null {
-  const part = buildingVisual(id, scene.textures.exists('barracks_blue')).parts.find((p) => scene.textures.exists(p.key) && !p.shooter);
+export function buildingThumb(
+  scene: Phaser.Scene,
+  id: BuildingId,
+  x: number,
+  y: number,
+  size: number,
+  color: TeamColor = teamColor(0),
+): Phaser.GameObjects.Image | null {
+  const part = teamVisual(scene.textures, id, color).parts.find((p) => scene.textures.exists(p.key) && !p.shooter);
   if (!part) return null;
   const img = scene.add.image(x, y, part.key, 0);
   const s = size / Math.max(img.width, img.height);

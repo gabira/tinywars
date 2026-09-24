@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { TILE } from '../config';
-import { TEAMS } from '../data/factions';
 import type { Building, Projectile, ResourceNode, Unit } from '../entities/Entity';
-import { buildingVisual, ORIGIN_Y, UNIT_ORIGIN_Y, type Part } from './visuals';
+import { teamColor } from './palette';
+import { originY, teamVisual, UNIT_ORIGIN_Y, type Part } from './visuals';
 
 const lerp = Phaser.Math.Linear;
 
@@ -70,7 +70,7 @@ export class UnitView {
     private scene: Phaser.Scene,
     u: Unit,
   ) {
-    this.sheetKey = `${u.def.sheet}_${TEAMS[u.team].color}`;
+    this.sheetKey = `${u.def.sheet}_${teamColor(u.team)}`;
     this.sprite = scene.add.sprite(u.x, u.y, this.sheetKey).setOrigin(0.5, UNIT_ORIGIN_Y[u.def.sheet] ?? 0.68);
   }
 
@@ -120,7 +120,6 @@ export class BuildingView {
   constructor(
     private scene: Phaser.Scene,
     readonly b: Building,
-    private hasBarracksArt: boolean,
   ) {
     const r = b.rect;
     this.container = scene.add.container(r.x + r.w / 2, r.y + r.h);
@@ -135,7 +134,7 @@ export class BuildingView {
     for (const p of parts) {
       if (!this.scene.textures.exists(p.key)) continue;
       const o = p.anim ? this.scene.add.sprite(p.dx, p.dy, p.key).play({ key: p.anim, startFrame: Math.floor(Math.random() * (this.scene.anims.get(p.anim)?.frames.length ?? 1)) }) : this.scene.add.image(p.dx, p.dy, p.key, 0);
-      o.setOrigin(0.5, ORIGIN_Y[p.key] ?? 1).setFlipX(!!p.flip);
+      o.setOrigin(0.5, originY(p.key) ?? 1).setFlipX(!!p.flip);
       this.container.add(o);
       this.objs.push(o);
       if (p.shooter && p.anim && o instanceof Phaser.GameObjects.Sprite) this.shooters.push({ sprite: o, idle: p.anim, shoot: p.shooter });
@@ -143,22 +142,11 @@ export class BuildingView {
   }
 
   sync(b: Building, visible: boolean): void {
-    const vis = buildingVisual(b.def.id, this.hasBarracksArt);
     const state = b.complete ? 'complete' : 'construction';
     if (state !== this.state) {
       this.state = state;
-      if (state === 'complete' || vis.construction === 'crop') this.build(vis.parts);
-      else this.build(vis.construction as Part[]);
-    }
-    if (state === 'construction' && vis.construction === 'crop') {
-      const p = 0.15 + 0.85 * b.progress;
-      for (const o of this.objs) {
-        const h = o.frame.height;
-        o.setCrop(0, h * (1 - p) * (ORIGIN_Y[o.texture.key] ?? 1), o.frame.width, h);
-        o.setTint(0xc8c0b0);
-      }
-    } else if (state === 'complete' && this.objs.length && this.objs[0].isCropped) {
-      for (const o of this.objs) o.setCrop().clearTint();
+      const vis = this.visual();
+      this.build(state === 'complete' ? vis.parts : vis.construction);
     }
     // fogo quando danificada
     const wantFires = b.complete ? (b.hp < b.maxHp * 0.25 ? 2 : b.hp < b.maxHp * 0.5 ? 1 : 0) : 0;
@@ -186,11 +174,15 @@ export class BuildingView {
 
   /** Troca para as ruínas e some depois de um tempo. */
   toRuin(now: number): void {
-    const vis = buildingVisual(this.b.def.id, this.hasBarracksArt);
+    const vis = this.visual();
     this.state = 'ruin';
     this.build(vis.destroyed);
     this.ruinUntil = now + 30_000;
     this.container.setDepth(this.b.rect.y + this.b.rect.h - 40);
+  }
+
+  private visual() {
+    return teamVisual(this.scene.textures, this.b.def.id, teamColor(this.b.team));
   }
 
   destroy(): void {
@@ -218,7 +210,7 @@ export class ResourceView {
         .setOrigin(0.5, 0.92)
         .play({ key: 'tree.idle', startFrame: (r.id * 7) % 4 });
     } else if (k === 'goldMine') {
-      this.obj = scene.add.image(r.x, r.ty * TILE + r.def.h * TILE, 'goldmine_inactive').setOrigin(0.5, ORIGIN_Y.goldmine_inactive);
+      this.obj = scene.add.image(r.x, r.ty * TILE + r.def.h * TILE, 'goldmine_inactive').setOrigin(0.5, originY('goldmine_inactive'));
     } else {
       this.obj = scene.add.sprite(r.x, r.y, 'sheep').setOrigin(0.5, 0.66).play({ key: 'sheep.idle', startFrame: r.id % 8 });
     }

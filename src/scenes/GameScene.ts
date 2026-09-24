@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { DEBUG, SIM_DT, TILE } from '../config';
+import { registerAnimations } from '../assets/animations';
+import { queueTeamAssets } from '../assets/loader';
 import type { DifficultyLevel } from '../data/difficulty';
 import { newSession, type Session } from '../game/Session';
 import { S, fmt } from '../i18n/t';
@@ -10,6 +12,8 @@ import { Fx } from '../render/Fx';
 import { Overlay } from '../render/Overlay';
 import { drawTerrain } from '../render/Terrain';
 import { ViewManager } from '../render/ViewManager';
+import { aiColorFor, setTeamColors, type TeamColor } from '../render/palette';
+import { loadColor } from '../game/prefs';
 
 /** Cena do mundo: roda a simulação em passo fixo e desenha tudo interpolado. */
 export class GameScene extends Phaser.Scene {
@@ -27,12 +31,20 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  init(data: { seed: number; difficulty: DifficultyLevel }): void {
-    this.session = newSession(data.seed ?? Date.now(), data.difficulty ?? 'normal');
+  init(data: { seed: number; difficulty: DifficultyLevel; color?: TeamColor }): void {
+    const color = data.color ?? loadColor();
+    setTeamColors(color);
+    this.session = newSession(data.seed ?? Date.now(), data.difficulty ?? 'normal', color);
     this.acc = 0;
   }
 
+  /** Carrega as texturas das cores desta partida, se ainda não estiverem em memória. */
+  preload(): void {
+    queueTeamAssets(this, [this.session.color, aiColorFor(this.session.color)]);
+  }
+
   create(): void {
+    registerAnimations(this);
     const s = this.session;
     const w = s.world;
     drawTerrain(this, w.map);
@@ -131,9 +143,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Reinicia com um novo mapa e a mesma dificuldade. */
   restart(): void {
-    const diff = this.session.difficulty;
+    const { difficulty, color } = this.session;
     this.scene.stop('Hud');
-    this.scene.restart({ seed: Math.floor(Math.random() * 1e9), difficulty: diff });
+    this.scene.restart({ seed: Math.floor(Math.random() * 1e9), difficulty, color });
   }
 
   quitToMenu(): void {

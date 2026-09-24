@@ -14,6 +14,7 @@ export const ptBR = {
   menu: {
     newGame: 'Novo Jogo',
     difficulty: 'Dificuldade: {level}',
+    color: 'Cor do exército: {color}',
     howToPlay: 'Como Jogar',
     credits: 'Créditos',
     back: 'Voltar',
@@ -25,6 +26,12 @@ export const ptBR = {
     mainMenu: 'Menu Principal',
     menu: 'Menu',
     confirmLeave: 'Sair da partida?',
+  },
+  colors: {
+    blue: 'Azul',
+    red: 'Vermelho',
+    purple: 'Roxo',
+    yellow: 'Amarelo',
   },
   difficulty: {
     easy: 'Fácil',

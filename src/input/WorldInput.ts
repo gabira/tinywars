@@ -7,7 +7,8 @@ import { pickAt, unitsInBox } from '../game/picking';
 import type { Session } from '../game/Session';
 import { S } from '../i18n/t';
 import type { Overlay } from '../render/Overlay';
-import { buildingVisual, ORIGIN_Y } from '../render/visuals';
+import { teamColor } from '../render/palette';
+import { originY, teamVisual } from '../render/visuals';
 import { canPlace } from '../systems/economy';
 import { smartCommand } from '../systems/commands';
 import type { CameraController } from './CameraController';
@@ -198,9 +199,9 @@ export class WorldInput {
     if (this.ghostKey !== def.id) {
       this.ghostObj?.destroy();
       this.ghostObj = this.scene.add.container(0, 0).setDepth(5.5e5);
-      for (const part of buildingVisual(def.id, this.scene.textures.exists('barracks_blue')).parts) {
+      for (const part of teamVisual(this.scene.textures, def.id, teamColor(0)).parts) {
         if (!this.scene.textures.exists(part.key)) continue;
-        const img = this.scene.add.image(part.dx, part.dy, part.key, 0).setOrigin(0.5, ORIGIN_Y[part.key] ?? 1).setFlipX(!!part.flip);
+        const img = this.scene.add.image(part.dx, part.dy, part.key, 0).setOrigin(0.5, originY(part.key) ?? 1).setFlipX(!!part.flip);
         this.ghostObj.add(img);
       }
       this.ghostKey = def.id;
