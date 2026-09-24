@@ -23,6 +23,8 @@ export interface CardButton {
   icon: IconSpec;
   enabled: boolean;
   active?: boolean;
+  /** Ação destrutiva (botão vermelho). */
+  danger?: boolean;
   action: () => void;
 }
 
@@ -187,6 +189,7 @@ export function commandCard(session: Session): CardButton[] {
         desc: S.cmdDesc.cancel,
         icon: { kind: 'image', key: 'icon_09' },
         enabled: true,
+        danger: true,
         action: () => {
           w.issue(0, { type: 'cancelBuild', buildingId: b.id });
           session.setSelection([]);

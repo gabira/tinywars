@@ -4,15 +4,26 @@ import type { Team } from '../data/types';
 import { getSession, type Session } from '../game/Session';
 import { teamColor } from '../render/palette';
 import { S, clockText, fmt } from '../i18n/t';
-import { CARD_W, CommandCardView } from '../ui/CommandCardView';
+import { CARD_H, CARD_W, CommandCardView } from '../ui/CommandCardView';
+import { HelpPanel } from '../ui/HelpPanel';
 import { Minimap } from '../ui/Minimap';
 import { SelectionPanel } from '../ui/SelectionPanel';
 import { Toasts } from '../ui/Toasts';
-import { portrait } from '../ui/icons';
-import { paperPanel, ribbon, scrollPanel, textButton, textStyle, woodPanel, darkText } from '../ui/widgets';
+import { portrait, RES_ICON } from '../ui/icons';
+import { darkText, hudPanel, ribbon, scrollPanel, slot, textButton } from '../ui/widgets';
 import type { GameScene } from './GameScene';
 
-/** Interface por cima do mundo: recursos, minimapa, seleção, comandos, avisos e menus. */
+/** Espessura visível das molduras da mesa de madeira (escala 0,5). */
+const FRAME = { side: 14, top: 13, bottom: 19 };
+/** Parte da barra superior escondida acima da tela (a moldura de cima fica de fora). */
+const TOP_BLEED = 100 - HUD_TOP;
+
+/**
+ * Interface por cima do mundo, em duas mesas de madeira do Free Pack:
+ * - barra superior: fichas de recursos, avisos no meio, relógio e menu;
+ * - console inferior: minimapa, pergaminho com a seleção (ou a dica do botão/modo) e comandos.
+ * Tudo fica dentro das molduras: nada flutua por cima do mapa.
+ */
 export class HudScene extends Phaser.Scene {
   private s!: Session;
   private gameScene!: GameScene;
@@ -21,10 +32,10 @@ export class HudScene extends Phaser.Scene {
   private clock!: Phaser.GameObjects.Text;
   private minimap!: Minimap;
   private panel!: SelectionPanel;
+  private help!: HelpPanel;
   private card!: CommandCardView;
   private toasts!: Toasts;
   private modal: Phaser.GameObjects.Container | null = null;
-  private modeHint!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Hud');
@@ -38,9 +49,9 @@ export class HudScene extends Phaser.Scene {
       this.gameScene.camCtl ? { cam: this.gameScene.cameras.main, ctl: this.gameScene.camCtl } : null,
     );
     this.panel = new SelectionPanel(this, this.s);
+    this.help = new HelpPanel(this, this.s);
     this.card = new CommandCardView(this, this.s);
     this.toasts = new Toasts(this);
-    this.modeHint = this.add.text(0, 0, '', textStyle(16, '#c8e6ff')).setOrigin(0.5, 1);
     this.layout();
 
     const ui = this.s.ui;
@@ -59,56 +70,79 @@ export class HudScene extends Phaser.Scene {
 
   private layout(): void {
     const { width: W, height: H } = this.scale;
-    this.staticLayer.removeAll(true);
+    const layer = this.staticLayer;
+    layer.removeAll(true);
 
-    // barra superior: papel do Free Pack com recursos (ícones do pacote) e relógio
-    const top = paperPanel(this, -6, -8, W + 12, HUD_TOP + 10, 0.36);
-    this.staticLayer.add(top);
-    const cy = HUD_TOP / 2 - 1;
-    const resIcons: [string, string][] = [
-      ['gold', 'icon_03'],
-      ['wood', 'icon_02'],
-      ['meat', 'icon_04'],
-    ];
-    let x = 18;
-    for (const [res, key] of resIcons) {
-      const icon = this.add.image(x + 14, cy, key).setDisplaySize(34, 34);
-      const t = this.add.text(x + 36, cy, '', darkText(20)).setOrigin(0, 0.5);
-      this.staticLayer.add([icon, t]);
+    // ---- barra superior: só a moldura de baixo (com os cantos de metal) aparece
+    layer.add(hudPanel(this, 0, -TOP_BLEED, W, TOP_BLEED + HUD_TOP));
+    const beam = HUD_TOP - FRAME.bottom; // altura das tábuas visíveis
+    const cy = Math.round(beam / 2);
+    const chipH = beam - 6;
+    let x = FRAME.side;
+    const chip = (w: number): number => {
+      layer.add(slot(this, x, cy - chipH / 2, w, chipH, 'paper'));
+      const at = x;
+      x += w + 8;
+      return at;
+    };
+    for (const res of ['gold', 'wood', 'meat'] as const) {
+      const at = chip(104);
+      const t = this.add.text(at + 38, cy, '', darkText(19)).setOrigin(0, 0.5);
+      layer.add([this.add.image(at + 18, cy, RES_ICON[res]).setDisplaySize(28, 28), t]);
       this.resTexts[res] = t;
-      x += 140;
     }
-    const popIcon = portrait(this, 'pawn', teamColor(0), x + 14, cy, 34);
-    const pop = this.add.text(x + 36, cy, '', darkText(20)).setOrigin(0, 0.5);
-    this.staticLayer.add([popIcon, pop]);
+    const popAt = chip(104);
+    const pop = this.add.text(popAt + 38, cy, '', darkText(19)).setOrigin(0, 0.5);
+    layer.add([portrait(this, 'pawn', teamColor(0), popAt + 18, cy, 30), pop]);
     this.resTexts.pop = pop;
+    const chipsEnd = x;
 
-    this.clock = this.add.text(W / 2, cy, '', darkText(20)).setOrigin(0.5);
-    this.staticLayer.add(this.clock);
+    // menu (botão redondo com engrenagem) e relógio à direita
+    const menuX = W - FRAME.side - chipH / 2 - 2;
     const menuBtn = this.add
-      .image(W - 30, cy, 'ui_btn_tiny_blue')
-      .setDisplaySize(40, 40)
+      .image(menuX, cy, 'ui_btn_tiny_round_blue')
+      .setDisplaySize(chipH + 4, chipH + 4)
       .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => menuBtn.setTint(0xd8f0ff))
+      .on('pointerout', () => menuBtn.clearTint())
       .on('pointerup', () => {
         this.s.paused = true;
         this.togglePause(true);
       });
-    const gear = this.add.image(W - 30, cy - 2, 'icon_10').setDisplaySize(28, 28);
-    const menuLabel = this.add.text(W - 56, cy, S.menu.menu, darkText(18)).setOrigin(1, 0.5);
-    this.staticLayer.add([menuBtn, gear, menuLabel]);
+    const gear = this.add.image(menuX, cy - 1, 'icon_10').setDisplaySize(chipH - 8, chipH - 8);
+    const clockW = 84;
+    const clockX = menuX - chipH / 2 - 10 - clockW;
+    layer.add(slot(this, clockX, cy - chipH / 2, clockW, chipH, 'paper'));
+    this.clock = this.add.text(clockX + clockW / 2, cy, '', darkText(19)).setOrigin(0.5);
+    layer.add([menuBtn, gear, this.clock]);
 
-    // painel inferior
+    // avisos no meio da barra
+    this.toasts.setArea(chipsEnd + 8, 0, clockX - chipsEnd - 16, beam);
+
+    // ---- console inferior: a moldura de baixo fica fora da tela
     const py = H - HUD_BOTTOM;
-    const bottom = woodPanel(this, -10, py - 6, W + 20, HUD_BOTTOM + 30, 0.5);
-    this.staticLayer.add(bottom);
-    this.staticLayer.sendToBack(bottom);
-    this.minimap.setPosition(18, py + (HUD_BOTTOM - this.minimap.height) / 2);
-    const cardX = W - CARD_W - 20;
-    this.card.layout(cardX, py + (HUD_BOTTOM - CARD_W) / 2);
-    const panelX = 18 + this.minimap.width + 24;
-    this.panel.layout(panelX, py + 14, cardX - panelX - 20, HUD_BOTTOM - 24);
-    this.modeHint.setPosition(W / 2, py - 8);
-    this.toasts.relayout();
+    layer.add(hudPanel(this, 0, py, W, HUD_BOTTOM + FRAME.bottom));
+    // área útil: da moldura de cima até uma margem igual à das laterais
+    const inTop = py + FRAME.top;
+    const inH = H - FRAME.side + 1 - inTop;
+    // minimapa numa fenda de madeira
+    const mmW = this.minimap.width + 8;
+    const mmH = this.minimap.height + 8;
+    const mmX = FRAME.side;
+    const mmY = inTop + Math.round((inH - mmH) / 2);
+    layer.add(slot(this, mmX, mmY, mmW, mmH));
+    this.minimap.setPosition(mmX + 4, mmY + 4);
+    // comandos à direita
+    const cardX = W - FRAME.side - CARD_W - 1;
+    this.card.layout(cardX, inTop + Math.round((inH - CARD_H) / 2));
+    // pergaminho no meio: seleção, ou a dica do botão / do modo atual (centralizado em telas largas)
+    const room = cardX - 13 - (mmX + mmW + 12);
+    const pw = Math.min(room, 780);
+    const px = mmX + mmW + 12 + Math.round((room - pw) / 2);
+    layer.add(slot(this, px, mmY, pw, mmH, 'paper'));
+    this.panel.layout(px + 12, mmY + 10, pw - 24, mmH - 20);
+    this.help.layout(px, mmY, pw, mmH);
+
     if (this.modal) {
       const winner = this.s.world.winner;
       this.modal.destroy();
@@ -127,12 +161,10 @@ export class HudScene extends Phaser.Scene {
     this.resTexts.pop.setText(`${p.pop}/${p.popCap}`).setColor(p.pop >= p.popCap ? '#b3261e' : COLORS.textDark);
     this.clock.setText(clockText(w.time));
     this.minimap.update(time);
-    this.panel.update();
     this.card.update();
+    this.panel.setVisible(!this.help.update(this.card.hovered));
+    this.panel.update();
     this.toasts.update(time);
-    const s = this.s;
-    const hint = s.mode === 'place' && s.placing ? S.buildings[s.placing].name : s.mode === 'attackMove' ? S.cmd.attackMove : '';
-    this.modeHint.setText(hint ? `${hint} — ${S.cmd.cancel}: Esc / botão direito` : '');
   }
 
   // ---------------------------------------------------------------- menus

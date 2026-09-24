@@ -46,7 +46,7 @@ export class Minimap {
         ctx.fillStyle = !m.land[i] ? '#3f8f95' : m.plateau[i] ? '#a9c46a' : m.cliff[i] ? '#4f6f73' : m.ramp[i] ? '#c8b27a' : m.patch[i] ? '#5c9f4a' : '#8fb04a';
         ctx.fillRect(x * PX, y * PX, PX, PX);
       }
-    this.frame = scene.add.rectangle(0, 0, this.width + 6, this.height + 6, 0x2b1d12).setOrigin(0);
+    this.frame = scene.add.rectangle(0, 0, this.width + 4, this.height + 4, 0x2b1d12).setOrigin(0);
     this.image = scene.add.image(0, 0, 'minimap').setOrigin(0).setInteractive();
     this.image.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.rightButtonDown()) {
@@ -76,7 +76,7 @@ export class Minimap {
   }
 
   setPosition(x: number, y: number): void {
-    this.frame.setPosition(x - 3, y - 3);
+    this.frame.setPosition(x - 2, y - 2);
     this.image.setPosition(x, y);
   }
 

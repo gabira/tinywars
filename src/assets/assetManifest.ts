@@ -174,8 +174,9 @@ export const BASE_IMAGES: ImageDef[] = [
   // interface (folhas de 9-slice com peças separadas: remontadas em ui/nineslices.ts)
   img('ui_banner_src', `${UI}/Banners/Banner.png`),
   img('ui_wood_src', `${UI}/Wood Table/WoodTable.png`),
-  img('ui_paper_src', `${UI}/Papers/RegularPaper.png`),
   img('ui_paper2_src', `${UI}/Papers/SpecialPaper.png`),
+  img('ui_wood_slots_src', `${UI}/Wood Table/WoodTable_Slots.png`),
+  img('ui_paper_slots_src', `${UI}/Banners/Banner_Slots.png`),
   img('ui_ribbons_big_src', `${UI}/Ribbons/BigRibbons.png`),
   img('ui_ribbons_small_src', `${UI}/Ribbons/SmallRibbons.png`),
   img('ui_bar_big_src', `${UI}/Bars/BigBar_Base.png`),
@@ -192,6 +193,7 @@ export const BASE_IMAGES: ImageDef[] = [
   img('ui_btn_round_blue_p', `${UI}/Buttons/SmallBlueRoundButton_Pressed.png`),
   img('ui_btn_tiny_blue', `${UI}/Buttons/TinySquareBlueButton.png`),
   img('ui_btn_tiny_red', `${UI}/Buttons/TinySquareRedButton.png`),
+  img('ui_btn_tiny_round_blue', `${UI}/Buttons/TinyRoundBlueButton.png`),
   ...Array.from({ length: 12 }, (_, i) => {
     const n = String(i + 1).padStart(2, '0');
     return img(`icon_${n}`, `${UI}/Icons/Icon_${n}.png`);

@@ -4,6 +4,9 @@ import type { IconSpec } from '../game/commandCard';
 import { teamColor, type TeamColor } from '../render/palette';
 import { buildingVisual } from '../render/visuals';
 
+/** Ícones de recurso do Free Pack (moeda, tronco e carne). */
+export const RES_ICON = { gold: 'icon_03', wood: 'icon_02', meat: 'icon_04' } as const;
+
 /** Área útil dos avatares do Free Pack (256 px com margem transparente). */
 const AVATAR_CONTENT = 196;
 

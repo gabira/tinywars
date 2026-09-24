@@ -41,6 +41,8 @@ export interface GameMap {
   starts: [{ tx: number; ty: number }, { tx: number; ty: number }];
   resources: PlacedResource[];
   decor: Decor[];
+  /** Planaltos gerados (os canônicos e os seus espelhos). */
+  plateaus: Plateau[];
 }
 
 /** Tile intransponível por causa do relevo (face do penhasco)? */
@@ -61,17 +63,71 @@ export const MAIN_H = 3;
 /** Quantidade de ouro por tipo de jazida (maior onde é mais arriscado). */
 export const GOLD_AMOUNT = { base: 1500, basePlateau: 2000, field: 2500, contested: 3000 } as const;
 
-interface Plateau {
+/** Rampa de um planalto: (x, y) é o tile de cima; o de baixo fica em (x, y + 1). */
+export interface PlateauRamp {
+  x: number;
+  y: number;
+  /** Lado para onde a rampa desce. */
+  dir: 'left' | 'right';
+}
+
+/** Formato do planalto: retângulo ou degraus na borda sul (a rampa fica no canto de dentro). */
+export type PlateauShape = 'rect' | 'stepLeft' | 'stepRight' | 'notch' | 'tongue';
+
+export interface Plateau {
+  /** Retângulo envolvente (o topo é sempre reto; a borda de baixo varia por coluna). */
   tx: number;
   ty: number;
   pw: number;
   ph: number;
-  left: boolean;
-  right: boolean;
+  shape: PlateauShape;
+  /** Última linha do topo em cada coluna (pw valores). */
+  bottoms: number[];
+  ramps: PlateauRamp[];
   /** Planalto ao lado de uma base (menor recompensa) ou disputado no meio do mapa. */
   nearBase: boolean;
   /** Gerado na metade de cima (o outro é o seu espelho). */
   canonical: boolean;
+}
+
+/**
+ * Perfil da borda sul: `d` é a altura do degrau (≥ 2 para caber uma rampa no canto de dentro).
+ * - stepLeft: parte funda à esquerda (L); stepRight: à direita
+ * - notch: fundo nas pontas e entalhe no meio (U); tongue: língua funda no meio (T)
+ */
+export function plateauBottoms(shape: PlateauShape, ty: number, pw: number, ph: number, a: number, b: number, d: number): number[] {
+  const deep = ty + ph - 1;
+  const shallow = deep - d;
+  return Array.from({ length: pw }, (_, i) => {
+    switch (shape) {
+      case 'rect':
+        return deep;
+      case 'stepLeft':
+        return i < a ? deep : shallow;
+      case 'stepRight':
+        return i >= pw - a ? deep : shallow;
+      case 'notch':
+        return i < a || i >= pw - b ? deep : shallow;
+      case 'tongue':
+        return i >= a && i < pw - b ? deep : shallow;
+    }
+  });
+}
+
+/** Rampas possíveis: nas pontas de fora e nos cantos de dentro dos degraus (desnível ≥ 2). */
+export function rampSpots(tx: number, bottoms: number[]): { outerLeft: PlateauRamp; outerRight: PlateauRamp; inner: PlateauRamp[] } {
+  const pw = bottoms.length;
+  const inner: PlateauRamp[] = [];
+  for (let i = 0; i < pw - 1; i++) {
+    const diff = bottoms[i] - bottoms[i + 1];
+    if (diff >= 2) inner.push({ x: tx + i + 1, y: bottoms[i], dir: 'right' });
+    if (diff <= -2) inner.push({ x: tx + i, y: bottoms[i + 1], dir: 'left' });
+  }
+  return {
+    outerLeft: { x: tx - 1, y: bottoms[0], dir: 'left' },
+    outerRight: { x: tx + pw, y: bottoms[pw - 1], dir: 'right' },
+    inner,
+  };
 }
 
 /** Gera um mapa de ilha com simetria central (justo para os dois lados). */
@@ -197,19 +253,24 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
   };
 
   const resources: PlacedResource[] = [];
-  const addPair = (kind: ResourceKind, tx: number, ty: number, margin = 0, amount?: number): boolean => {
+  /** Coloca um recurso em `a` e o seu par em `b` (os dois ou nenhum). */
+  const addAt = (kind: ResourceKind, a: { tx: number; ty: number }, b: { tx: number; ty: number }, margin = 0, amount?: number): boolean => {
     const def = RESOURCES[kind];
-    const m = mirrorRect(tx, ty, def.w, def.h);
-    if (!canUse(tx, ty, def.w, def.h, margin) || !canUse(m.tx, m.ty, def.w, def.h, margin)) return false;
-    if (!oneLevel(tx, ty, def.w, def.h)) return false;
+    if (!canUse(a.tx, a.ty, def.w, def.h, margin) || !canUse(b.tx, b.ty, def.w, def.h, margin)) return false;
+    if (!oneLevel(a.tx, a.ty, def.w, def.h) || !oneLevel(b.tx, b.ty, def.w, def.h)) return false;
     // evita sobreposição com o próprio espelho perto do centro
-    if (Math.abs(tx - m.tx) < def.w + margin && Math.abs(ty - m.ty) < def.h + margin) return false;
-    resources.push({ kind, tx, ty, amount }, { kind, tx: m.tx, ty: m.ty, amount });
-    for (const o of [{ tx, ty }, m]) {
+    if (Math.abs(a.tx - b.tx) < def.w + margin && Math.abs(a.ty - b.ty) < def.h + margin) return false;
+    resources.push({ kind, tx: a.tx, ty: a.ty, amount }, { kind, tx: b.tx, ty: b.ty, amount });
+    for (const o of [a, b]) {
       reserve(o.tx, o.ty, def.w, def.h);
       for (let y = o.ty; y < o.ty + def.h; y++) for (let x = o.tx; x < o.tx + def.w; x++) resOcc[idx(x, y)] = 1;
     }
     return true;
+  };
+  /** Recurso no chão e o seu espelho (rotação de 180°). */
+  const addPair = (kind: ResourceKind, tx: number, ty: number, margin = 0, amount?: number): boolean => {
+    const def = RESOURCES[kind];
+    return addAt(kind, { tx, ty }, mirrorRect(tx, ty, def.w, def.h), margin, amount);
   };
 
   const c0 = baseCenter(p0);
@@ -234,40 +295,79 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
   }
 
   // --- planaltos (um nível): topo caminhável, penhasco ao sul e rampas nas laterais de baixo.
-  // Gerados na metade de cima (onde fica a base da IA) e espelhados; o espelho troca o lado das
-  // rampas, mas o penhasco fica sempre virado para o sul.
-  const plateaus: Plateau[] = [];
+  // Gerados na metade de cima (onde fica a base da IA) e espelhados só na horizontal: o penhasco
+  // fica sempre virado para o sul (o tileset só tem essa face) e as rampas trocam de lado.
+  const pairs: [Plateau, Plateau][] = [];
   const stampPlateau = (p: Plateau) => {
-    for (let y = p.ty; y < p.ty + p.ph; y++) for (let x = p.tx; x < p.tx + p.pw; x++) plateau[idx(x, y)] = 1;
-    const bottom = p.ty + p.ph - 1;
-    if (p.left) {
-      ramp[idx(p.tx - 1, bottom)] = RAMP.upLeft;
-      ramp[idx(p.tx - 1, bottom + 1)] = RAMP.downLeft;
+    p.bottoms.forEach((bottom, i) => {
+      for (let y = p.ty; y <= bottom; y++) plateau[idx(p.tx + i, y)] = 1;
+    });
+    // margem de chão em volta, incluindo o recuo embaixo dos degraus (o topo fica livre)
+    for (let y = p.ty - 1; y <= p.ty + p.ph + 1; y++)
+      for (let x = p.tx - 2; x <= p.tx + p.pw + 1; x++) if (inB(x, y) && !plateau[idx(x, y)]) occ[idx(x, y)] = 1;
+    for (const r of p.ramps) {
+      const left = r.dir === 'left';
+      ramp[idx(r.x, r.y)] = left ? RAMP.upLeft : RAMP.upRight;
+      ramp[idx(r.x, r.y + 1)] = left ? RAMP.downLeft : RAMP.downRight;
+      reserve(left ? r.x + 1 : r.x - 2, r.y - 1, 2, 2); // chegada no topo
+      reserve(left ? r.x - 2 : r.x + 1, r.y - 1, 2, 4); // acesso pelo chão
     }
-    if (p.right) {
-      ramp[idx(p.tx + p.pw, bottom)] = RAMP.upRight;
-      ramp[idx(p.tx + p.pw, bottom + 1)] = RAMP.downRight;
-    }
-    // reserva: penhasco, rampas e a margem de chão em volta; no topo, a área de chegada das rampas
-    reserve(p.tx - 1, p.ty - 1, p.pw + 2, 1);
-    reserve(p.tx - 2, p.ty, 2, p.ph + 3);
-    reserve(p.tx + p.pw, p.ty, 2, p.ph + 3);
-    reserve(p.tx - 1, p.ty + p.ph, p.pw + 2, 2);
-    if (p.left) reserve(p.tx, bottom - 1, 2, 2);
-    if (p.right) reserve(p.tx + p.pw - 2, bottom - 1, 2, 2);
-    reserve(p.tx - 3, bottom - 1, 2, 4);
-    reserve(p.tx + p.pw + 1, bottom - 1, 2, 4);
   };
-  const tryPlateau = (tx: number, ty: number, pw: number, ph: number, left: boolean, right: boolean, nearBase: boolean): boolean => {
+  /** Espelho do planalto: mesma posição da rotação de 180°, mas só invertido na horizontal. */
+  const mirrorPlateau = (p: Plateau): Plateau => {
+    const m = mirrorRect(p.tx, p.ty, p.pw, p.ph);
+    return {
+      ...p,
+      tx: m.tx,
+      ty: m.ty,
+      shape: p.shape === 'stepLeft' ? 'stepRight' : p.shape === 'stepRight' ? 'stepLeft' : p.shape,
+      bottoms: p.bottoms.map((_, i) => m.ty + p.bottoms[p.pw - 1 - i] - p.ty),
+      ramps: p.ramps.map((r) => ({ x: w - 1 - r.x, y: m.ty + r.y - p.ty, dir: r.dir === 'left' ? 'right' : 'left' })),
+      canonical: false,
+    };
+  };
+  /**
+   * Sorteia o formato e as rampas. Nos planaltos disputados o lado da rampa varia (esquerda,
+   * direita ou as duas); com degraus, a rampa fica no canto de dentro, no meio da face sul.
+   * `nearBase`: a rampa desce para a direita, o lado da base da IA.
+   */
+  const shapePlateau = (tx: number, ty: number, pw: number, ph: number, nearBase: boolean): Plateau => {
+    let shape: PlateauShape = rng.pick<PlateauShape>(nearBase ? ['rect', 'rect', 'stepLeft'] : ['rect', 'stepLeft', 'stepRight', 'notch', 'tongue']);
+    // o degrau deixa pelo menos 4 linhas atravessando o planalto inteiro
+    const d = Math.min(rng.int(2, 3), ph - 4);
+    let a = 0;
+    let b = 0;
+    if (shape === 'stepLeft' || shape === 'stepRight') a = rng.int(3, pw - 4);
+    else if (shape === 'notch' || shape === 'tongue') {
+      a = rng.int(3, 4);
+      b = rng.int(3, 4);
+    }
+    if (d < 2 || (shape === 'notch' && pw - a - b < 4) || (shape === 'tongue' && pw - a - b < 3)) shape = 'rect';
+    const bottoms = plateauBottoms(shape, ty, pw, ph, a, b, d);
+    const spots = rampSpots(tx, bottoms);
+    let ramps: PlateauRamp[];
+    if (nearBase) ramps = shape === 'rect' ? [spots.outerRight] : spots.inner.filter((r) => r.dir === 'right');
+    else if (shape === 'rect') {
+      const roll = rng.next();
+      ramps = roll < 0.4 ? [spots.outerLeft, spots.outerRight] : roll < 0.7 ? [spots.outerLeft] : [spots.outerRight];
+    } else if (shape === 'stepLeft' || shape === 'stepRight') {
+      ramps = [...spots.inner];
+      if (rng.chance(0.5)) ramps.push(rng.chance(0.5) ? spots.outerLeft : spots.outerRight);
+    } else {
+      ramps = rng.chance(0.3) ? [rng.pick(spots.inner)] : [...spots.inner];
+    }
+    return { tx, ty, pw, ph, shape, bottoms, ramps, nearBase, canonical: true };
+  };
+  const tryPlateau = (tx: number, ty: number, pw: number, ph: number, nearBase: boolean): boolean => {
     if (ty + ph + 1 > Math.floor(h / 2) - 2) return false; // bloco inteiro na metade de cima
     const block = (x: number, y: number) => canUse(x - 1, y, pw + 2, ph + 1, 1);
     const m = mirrorRect(tx, ty, pw, ph);
     if (!block(tx, ty) || !block(m.tx, m.ty)) return false;
-    const a: Plateau = { tx, ty, pw, ph, left, right, nearBase, canonical: true };
-    const b: Plateau = { tx: m.tx, ty: m.ty, pw, ph, left: right, right: left, nearBase, canonical: false };
+    const a = shapePlateau(tx, ty, pw, ph, nearBase);
+    const b = mirrorPlateau(a);
     stampPlateau(a);
     stampPlateau(b);
-    plateaus.push(a, b);
+    pairs.push([a, b]);
     return true;
   };
 
@@ -288,35 +388,45 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
       tx = Math.round(c1.x - pw - rng.range(3, 8));
       ty = Math.round(c1.y + rng.range(4, 10));
     }
-    // rampa do lado da base (a direita fica mais perto dela)
-    if (tryPlateau(tx, ty, pw, ph, false, true, true)) break;
+    if (tryPlateau(tx, ty, pw, ph, true)) break;
   }
-  // planaltos disputados no meio do mapa, com rampas dos dois lados
+  // planaltos disputados no meio do mapa
   const contested = Math.max(1, Math.round(k * 0.7));
   for (let placed = 0, tries = 0; placed < contested && tries < 250; tries++) {
-    const pw = rng.int(7, 11);
-    const ph = rng.int(5, 6);
+    const pw = rng.int(8, 13);
+    const ph = rng.int(6, 7);
     const tx = rng.int(Math.floor(w * 0.1), Math.floor(w * 0.7));
     const ty = rng.int(3, Math.floor(h / 2) - ph - 3);
     const cx = tx + pw / 2;
     const cy = ty + ph / 2;
     if (Math.hypot(cx - c1.x, cy - c1.y) < 16 || Math.hypot(cx - c0.x, cy - c0.y) < 16) continue;
-    if (tryPlateau(tx, ty, pw, ph, true, true, false)) placed++;
+    if (tryPlateau(tx, ty, pw, ph, false)) placed++;
   }
 
-  // recursos no topo: jazida grande no meio, floresta na borda de trás e ovelhas
-  plateaus.filter((p) => p.canonical).forEach((p) => {
-    const gold = p.nearBase ? GOLD_AMOUNT.basePlateau : GOLD_AMOUNT.contested;
-    addPair('goldMine', p.tx + Math.floor(p.pw / 2) - 1, p.ty + Math.floor(p.ph / 2) - 1, 0, gold);
-    for (let x = p.tx + 1; x < p.tx + p.pw - 1; x++) {
-      if (rng.chance(0.85)) addPair('tree', x, p.ty);
-      if (rng.chance(0.35)) addPair('tree', x, p.ty + 1);
+  // recursos no topo: jazida grande no meio, floresta na borda de trás e ovelhas.
+  // O par de cada recurso vai para o mesmo ponto do planalto espelhado.
+  for (const [a, b] of pairs) {
+    const top = (x: number, y: number, rw: number, rh: number) => {
+      for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) if (!inB(xx, yy) || !plateau[idx(xx, yy)]) return false;
+      return true;
+    };
+    const put = (kind: ResourceKind, x: number, y: number, amount?: number) => {
+      const def = RESOURCES[kind];
+      const m = { tx: w - x - def.w, ty: b.ty + y - a.ty };
+      return top(x, y, def.w, def.h) && top(m.tx, m.ty, def.w, def.h) && addAt(kind, { tx: x, ty: y }, m, 0, amount);
+    };
+    // linhas que atravessam o planalto inteiro (acima dos degraus)
+    const body = Math.min(...a.bottoms) - a.ty + 1;
+    put('goldMine', a.tx + Math.floor(a.pw / 2) - 1, a.ty + Math.floor(body / 2) - 1, a.nearBase ? GOLD_AMOUNT.basePlateau : GOLD_AMOUNT.contested);
+    for (let x = a.tx + 1; x < a.tx + a.pw - 1; x++) {
+      if (rng.chance(0.85)) put('tree', x, a.ty);
+      if (rng.chance(0.35)) put('tree', x, a.ty + 1);
     }
     let sheep = 0;
     for (let t = 0; t < 30 && sheep < 3; t++) {
-      if (addPair('sheep', rng.int(p.tx + 1, p.tx + p.pw - 2), rng.int(p.ty + 2, p.ty + p.ph - 2))) sheep++;
+      if (put('sheep', rng.int(a.tx + 1, a.tx + a.pw - 2), rng.int(a.ty + 2, a.ty + a.ph - 2))) sheep++;
     }
-  });
+  }
 
   // florestas no chão (as dos planaltos já foram postas)
   const forest = (cx: number, cy: number, r: number, density: number) => {
@@ -495,5 +605,5 @@ export function generateMap(seed: number, w = MAP_W, h = MAP_H): GameMap {
     break;
   }
 
-  return { w, h, seed, land, patch, plateau, cliff, ramp, starts: [p0, p1], resources, decor };
+  return { w, h, seed, land, patch, plateau, cliff, ramp, starts: [p0, p1], resources, decor, plateaus: pairs.flat() };
 }

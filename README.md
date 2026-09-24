@@ -81,14 +81,21 @@ As jazidas têm tamanhos diferentes: quanto mais arriscado o lugar, mais ouro.
 
 **Planaltos:** cada mapa tem 6 planaltos (um ao lado de cada base e quatro disputados no meio), com floresta, jazida e ovelhas no topo.
 
-- Só se sobe e desce pelas **rampas** nas laterais do penhasco; as bordas não deixam passar.
+- Só se sobe e desce pelas **rampas**; as bordas não deixam passar.
+- **Formatos e rampas variam:** retangular (rampa só à esquerda, só à direita ou dos dois lados), em L, em U (entalhe no meio) ou em T (língua no meio). Nos formatos com degrau, a rampa fica no canto de dentro, no meio da face sul.
 - Dá para **construir lá em cima**, com a construção inteira no topo e sem tapar a rampa. Uma base no alto fica protegida, com uma entrada só.
 - **Vantagem da altura:** no alto, arqueiros e torres ganham +1 tile de alcance contra quem está embaixo e +2 de visão; as outras unidades, +1 de visão.
 - De baixo **não se enxerga o topo**, só a beirada. Unidades embaixo também não atacam sozinhas quem está em cima.
 
+**Interface:** tudo fica dentro das duas mesas de madeira do HUD, sem nada flutuando sobre o mapa.
+
+- **Barra de cima:** ouro, madeira, carne e população; os avisos aparecem no meio da barra (uma mensagem repetida ganha um contador, ×2, ×3...); relógio e menu à direita.
+- **Console de baixo:** minimapa, pergaminho com a seleção (vida, ataque, armadura, o que a unidade está fazendo, fila de treino) e a grade 3×3 de comandos com as teclas de atalho.
+- Passando o mouse num botão, a dica (custo, tempo e atalho) aparece no pergaminho. Ao posicionar uma construção, ele mostra como confirmar ou cancelar.
+
 **Cor do reino** (escolhida no menu): Azul, Vermelho, Amarelo, Roxo ou Preto. O reino rival fica com vermelho, ou preto se você escolher vermelho.
 
-**Mapa:** ilha de 96×72 tiles gerada a cada partida, simétrica para os dois lados, com planaltos, jazidas de ouro contestadas e rebanhos de ovelhas no meio.
+**Mapa:** ilha de 96×72 tiles gerada a cada partida, simétrica para os dois lados (os planaltos são espelhados só na horizontal, para o penhasco ficar sempre virado para o sul), com planaltos, jazidas de ouro contestadas e rebanhos de ovelhas no meio.
 
 **Dificuldade** (escolhida no menu): Fácil, Normal ou Difícil. Muda a velocidade de decisão da IA, o ritmo de coleta, o tamanho das ondas e o primeiro ataque: cerca de 7, 5 e 3,5 minutos.
 

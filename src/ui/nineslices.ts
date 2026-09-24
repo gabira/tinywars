@@ -42,12 +42,31 @@ function compose(scene: Phaser.Scene, src: string, dest: string, xs: Span[], ys:
   tex.refresh();
 }
 
+/**
+ * Versões "recortadas": cada peça vai só até a borda visível, sem a margem transparente das
+ * folhas. Assim o retângulo pedido é exatamente o que aparece (o HUD encaixa nas molduras).
+ * As bordas têm tamanho par para caírem em pixels inteiros na escala 0,5.
+ * As fendas (slots) usam cantos de 20 px e um miolo liso, para caber em tamanhos pequenos.
+ */
+const TRIMMED = {
+  ui_wood_t: { src: 'ui_wood_src', xs: [[44, 84], [192, 64], [320, 84]], ys: [[42, 86], [192, 64], [320, 104]] },
+  ui_dark_t: { src: 'ui_paper2_src', xs: [[10, 54], [128, 64], [256, 54]], ys: [[20, 44], [128, 64], [256, 44]] },
+  ui_slot_wood: { src: 'ui_wood_slots_src', xs: [[12, 20], [80, 32], [160, 20]], ys: [[11, 20], [80, 32], [161, 20]] },
+  ui_slot_paper: { src: 'ui_paper_slots_src', xs: [[5, 20], [80, 32], [170, 20]], ys: [[5, 20], [80, 32], [168, 20]] },
+} satisfies Record<string, { src: string; xs: Span[]; ys: Span[] }>;
+
+export type TrimmedKey = keyof typeof TRIMMED;
+
+/** Bordas (esquerda, direita, cima, baixo) de uma textura recortada, para o NineSlice. */
+export function trimmedSlices(key: TrimmedKey): [number, number, number, number] {
+  const t = TRIMMED[key];
+  return [t.xs[0][1], t.xs[2][1], t.ys[0][1], t.ys[2][1]];
+}
+
 /** Monta todas as texturas de 9-slice/3-slice da interface (idempotente). */
 export function buildUiTextures(scene: Phaser.Scene): void {
+  for (const [dest, t] of Object.entries(TRIMMED)) compose(scene, t.src, dest, t.xs, t.ys);
   compose(scene, 'ui_banner_src', 'ui_banner', BIG, BIG);
-  compose(scene, 'ui_wood_src', 'ui_wood', BIG, BIG);
-  compose(scene, 'ui_paper_src', 'ui_paper', SMALL, SMALL);
-  compose(scene, 'ui_paper2_src', 'ui_paper2', SMALL, SMALL);
   compose(scene, 'ui_btn_big_blue_src', 'ui_btn_blue', SMALL, SMALL);
   compose(scene, 'ui_btn_big_blue_p_src', 'ui_btn_blue_p', SMALL, SMALL);
   compose(scene, 'ui_btn_big_red_src', 'ui_btn_red', SMALL, SMALL);

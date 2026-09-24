@@ -12,13 +12,19 @@ describe('MapGenerator', () => {
       for (const s of m.starts)
         for (let y = s.ty; y < s.ty + MAIN_H; y++)
           for (let x = s.tx; x < s.tx + MAIN_W; x++) expect(m.land[y * m.w + x]).toBe(1);
-      // cada recurso tem seu espelho (rotação de 180°) e nenhum fica sobre o relevo
+      // cada recurso no chão tem seu espelho (rotação de 180°); os do topo acompanham o planalto
+      // espelhado. Nenhum fica sobre o relevo.
       const keys = new Set(m.resources.map((r) => `${r.kind}:${r.tx},${r.ty}`));
+      const onTop: Record<string, number> = {};
       for (const r of m.resources) {
         const { w: rw, h: rh } = RESOURCES[r.kind];
-        expect(keys.has(`${r.kind}:${m.w - r.tx - rw},${m.h - r.ty - rh}`)).toBe(true);
+        if (m.plateau[r.ty * m.w + r.tx]) {
+          const key = `${r.kind}:${r.ty < m.h / 2 ? 'n' : 's'}`;
+          onTop[key] = (onTop[key] ?? 0) + 1;
+        } else expect(keys.has(`${r.kind}:${m.w - r.tx - rw},${m.h - r.ty - rh}`)).toBe(true);
         for (let y = r.ty; y < r.ty + rh; y++) for (let x = r.tx; x < r.tx + rw; x++) expect(reliefBlocked(m, x, y)).toBe(false);
       }
+      for (const kind of ['goldMine', 'tree', 'sheep']) expect(onTop[`${kind}:n`]).toBe(onTop[`${kind}:s`]);
       // o relevo bloqueia o mesmo número de tiles dos dois lados, e nunca as bases
       let top = 0;
       let bottom = 0;

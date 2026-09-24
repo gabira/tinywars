@@ -1,36 +1,48 @@
 import Phaser from 'phaser';
-import { COLORS } from '../config';
-import { RES_TYPES } from '../data/types';
 import { cardSignature, commandCard, type CardButton } from '../game/commandCard';
 import type { Session } from '../game/Session';
-import { S, fmt } from '../i18n/t';
 import { iconFor } from './icons';
-import { textStyle, woodPanel } from './widgets';
+import { slot, textStyle } from './widgets';
 
-const SIZE = 50;
-const GAP = 5;
+const SIZE = 48;
+const GAP = 6;
 export const CARD_W = SIZE * 3 + GAP * 2;
+export const CARD_H = CARD_W;
 
-/** Grade 3x3 de botões de comando + tooltip. */
+/** Área útil dos botões quadrados do Free Pack (90 px no quadro de 128). */
+const BTN_CONTENT = 90;
+
+/**
+ * Grade 3x3 de botões de comando. Cada casa é uma fenda de madeira (as vazias continuam
+ * visíveis); a dica do botão sob o mouse aparece dentro do HUD, no painel central.
+ */
 export class CommandCardView {
+  private cells: Phaser.GameObjects.Container;
   private root: Phaser.GameObjects.Container;
-  private tip: Phaser.GameObjects.Container;
   private sig = '';
   private x = 0;
   private y = 0;
+  /** Botão sob o mouse (para o painel de ajuda). */
+  hovered: CardButton | null = null;
 
   constructor(
     private scene: Phaser.Scene,
     private session: Session,
   ) {
+    this.cells = scene.add.container(0, 0);
     this.root = scene.add.container(0, 0);
-    this.tip = scene.add.container(0, 0).setDepth(1000).setVisible(false);
   }
 
   layout(x: number, y: number): void {
     this.x = x;
     this.y = y;
     this.sig = '';
+    this.cells.removeAll(true);
+    for (let i = 0; i < 9; i++) {
+      const cx = x + (i % 3) * (SIZE + GAP);
+      const cy = y + Math.floor(i / 3) * (SIZE + GAP);
+      this.cells.add(slot(this.scene, cx - 1, cy - 1, SIZE + 2, SIZE + 2).setAlpha(0.9));
+    }
   }
 
   update(): void {
@@ -39,81 +51,50 @@ export class CommandCardView {
     if (sig === this.sig) return;
     this.sig = sig;
     this.root.removeAll(true);
-    this.tip.setVisible(false);
+    // mantém a dica se o mesmo botão continua no lugar (ex.: custo ficou acessível)
+    const h = this.hovered;
+    this.hovered = h ? (buttons.find((b) => b.slot === h.slot && b.name === h.name) ?? null) : null;
     for (const b of buttons) this.button(b);
   }
 
   private button(b: CardButton): void {
-    const col = b.slot % 3;
-    const row = Math.floor(b.slot / 3);
-    const cx = this.x + col * (SIZE + GAP) + SIZE / 2;
-    const cy = this.y + row * (SIZE + GAP) + SIZE / 2;
-    // botão quadrado do Free Pack (área útil de 90 px no quadro de 128)
-    const scale = (SIZE + 4) / 90;
-    const bg = this.scene.add.image(cx, cy, 'ui_btn_sq_blue').setScale(scale).setInteractive({ useHandCursor: true });
-    const tint = () => (b.active ? bg.setTint(0xfff0a0) : b.enabled ? bg.clearTint() : bg.setTint(0x9a9a9a));
+    const cx = this.x + (b.slot % 3) * (SIZE + GAP) + SIZE / 2;
+    const cy = this.y + Math.floor(b.slot / 3) * (SIZE + GAP) + SIZE / 2;
+    const tex = b.danger ? 'ui_btn_sq_red' : 'ui_btn_sq_blue';
+    const scale = SIZE / BTN_CONTENT;
+    const bg = this.scene.add.image(cx, cy, tex).setScale(scale).setInteractive({ useHandCursor: true });
+    const tint = () => (b.active ? bg.setTint(0xfff0a0) : b.enabled ? bg.clearTint() : bg.setTint(0x8c8c8c));
     tint();
     this.root.add(bg);
-    const icon = iconFor(this.scene, b.icon, cx, cy - 2, SIZE - 16);
+    const icon = iconFor(this.scene, b.icon, cx, cy - 2, SIZE - 14);
     if (icon) {
-      if (!b.enabled) icon.setAlpha(0.55);
+      if (!b.enabled) icon.setAlpha(0.5);
       this.root.add(icon);
     }
     if (b.hotkey && b.hotkey !== 'ESC') {
-      this.root.add(this.scene.add.text(cx + SIZE / 2 - 5, cy + SIZE / 2 - 7, b.hotkey, textStyle(12)).setOrigin(1, 1));
+      const badge = this.scene.add.rectangle(cx + SIZE / 2 - 3, cy + SIZE / 2 - 3, 15, 15, 0x2b1d12, 0.85).setOrigin(1, 1);
+      const key = this.scene.add.text(cx + SIZE / 2 - 10.5, cy + SIZE / 2 - 10.5, b.hotkey, textStyle(11, '#fff8e7', false)).setOrigin(0.5);
+      this.root.add([badge, key]);
     }
     bg.on('pointerover', () => {
-      bg.setScale(scale * 1.06);
-      this.showTip(b, cx, cy);
+      bg.setScale(scale * 1.05);
+      this.hovered = b;
     });
     bg.on('pointerout', () => {
-      bg.setScale(scale).setTexture('ui_btn_sq_blue');
+      bg.setScale(scale).setTexture(tex);
+      if (icon) icon.y = cy - 2;
       tint();
-      this.tip.setVisible(false);
+      if (this.hovered === b) this.hovered = null;
     });
-    bg.on('pointerdown', () => bg.setTexture('ui_btn_sq_blue_p'));
+    bg.on('pointerdown', () => {
+      bg.setTexture(`${tex}_p`);
+      if (icon) icon.y = cy + 2;
+    });
     bg.on('pointerup', () => {
-      bg.setTexture('ui_btn_sq_blue');
+      bg.setTexture(tex);
+      if (icon) icon.y = cy - 2;
       b.action();
       this.session.ui.emit('selection');
     });
-  }
-
-  private showTip(b: CardButton, bx: number, by: number): void {
-    this.tip.removeAll(true);
-    const lines: { text: string; color?: string; size?: number }[] = [{ text: b.name, size: 18, color: COLORS.gold }];
-    if (b.desc) lines.push({ text: b.desc });
-    const player = this.session.world.players[0];
-    if (b.cost) {
-      const parts = RES_TYPES.filter((r) => b.cost![r]).map((r) => ({ r, v: b.cost![r]! }));
-      if (parts.length) {
-        const ok = parts.every((p) => player.res[p.r] >= p.v);
-        lines.push({
-          text: fmt(S.tooltip.cost, { cost: parts.map((p) => `${p.v} ${S.res[p.r]}`).join(', ') }),
-          color: ok ? '#fff8e7' : COLORS.bad,
-        });
-      }
-    }
-    if (b.time) lines.push({ text: fmt(S.tooltip.time, { s: b.time }) });
-    if (b.pop) lines.push({ text: fmt(S.tooltip.pop, { n: b.pop }) });
-    if (b.hotkey && b.hotkey !== 'ESC') lines.push({ text: fmt(S.tooltip.hotkey, { key: b.hotkey }), color: '#c8e6ff' });
-
-    const texts = lines.map((l, i) =>
-      this.scene.add.text(12, 10 + i * 22, l.text, { ...textStyle(l.size ?? 15, l.color), wordWrap: { width: 280 } }),
-    );
-    // reposiciona considerando quebras de linha
-    let yy = 10;
-    for (const t of texts) {
-      t.setY(yy);
-      yy += t.height + 2;
-    }
-    const w = Math.max(...texts.map((t) => t.width)) + 24;
-    const h = yy + 8;
-    const panel = woodPanel(this.scene, -6, -6, w + 12, h + 12, 0.35);
-    this.tip.add([panel, ...texts]);
-    const { width } = this.scene.scale;
-    const tx = Math.min(width - w - 8, bx - w / 2);
-    const ty = by - SIZE / 2 - h - 10 - (by - this.y);
-    this.tip.setPosition(Math.max(8, tx), ty).setVisible(true);
   }
 }
