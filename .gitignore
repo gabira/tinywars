@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.cache/
+*.log
+# Assets da Pixel Frog: baixados localmente com `npm run assets` (não redistribuir)
+public/assets/
+assets-manual/*.zip
