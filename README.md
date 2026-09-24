@@ -8,6 +8,16 @@ Feito com Phaser 3, TypeScript e Vite. A arte é o pacote [Tiny Swords](https://
 
 Requisito: Node.js 22.12 ou mais novo.
 
+**Jeito mais simples** — um único comando cuida de tudo (instala as dependências, baixa a arte e abre o jogo):
+
+```bash
+npm run play
+```
+
+No Windows, dá para dar duplo clique em [`jogar.bat`](jogar.bat) em vez de usar o terminal.
+
+**Passo a passo manual**, se preferir mais controle:
+
 ```bash
 npm install
 npm run assets   # baixa a arte gratuita do itch.io para public/assets/

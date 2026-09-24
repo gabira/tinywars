@@ -5,6 +5,8 @@
   "description": "TinyWars — jogo de estratégia em tempo real no navegador (Cavaleiros vs Goblins) com arte Tiny Swords da Pixel Frog.",
   "type": "module",
   "scripts": {
+    "start": "node scripts/play.mjs",
+    "play": "node scripts/play.mjs",
     "predev": "node scripts/check-assets.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
